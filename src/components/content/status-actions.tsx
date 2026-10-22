@@ -73,7 +73,7 @@ export function StatusActions({
       const res = await deleteContent(id);
       if (res.ok) {
         toast.success("Content deleted.");
-        router.replace("/");
+        router.replace("/board");
       } else toast.error(res.error);
     });
   }

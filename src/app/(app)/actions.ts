@@ -31,6 +31,7 @@ export async function updateContentStatus(id: string, status: string, position?:
   if (error) return { ok: false, error: friendlyDbError(error.message) };
 
   revalidatePath("/");
+  revalidatePath("/board");
   revalidatePath(`/content/${id}`);
   revalidatePath("/calendar");
   return { ok: true };
@@ -45,6 +46,7 @@ export async function deleteContent(id: string): Promise<Result> {
     await supabase.storage.from("content-images").remove(row.images as string[]);
   }
   revalidatePath("/");
+  revalidatePath("/board");
   revalidatePath("/calendar");
   return { ok: true };
 }

@@ -1,26 +1,25 @@
-import { KanbanBoard } from "@/components/board/kanban-board";
-import { getAllContent, getCampaigns, getCommentCounts, getCurrentProfile, getTeam } from "@/lib/data";
+import { MyWork } from "@/components/my-work/my-work";
+import { getCampaigns, getCurrentProfile, getTeam, getWorkFor } from "@/lib/data";
 
-export const metadata = { title: "Content board · DrupalAsia Marketing CMS" };
+export const metadata = { title: "My work · DrupalAsia Marketing CMS" };
 
-export default async function BoardPage() {
-  const [profile, team, content, campaigns, counts] = await Promise.all([
-    getCurrentProfile(),
-    getTeam(),
-    getAllContent(),
-    getCampaigns(),
-    getCommentCounts(),
-  ]);
+/** Homepage: the signed-in person's assigned posts, progress and completed work. The owner can view anyone's. */
+export default async function MyWorkPage({ searchParams }: { searchParams: Promise<{ person?: string }> }) {
+  const { person } = await searchParams;
+  const [me, team, campaigns] = await Promise.all([getCurrentProfile(), getTeam(), getCampaigns()]);
+
+  const isOwner = me.role === "owner";
+  const viewing = (isOwner && person ? team.find((p) => p.id === person) : undefined) ?? me;
+  const { assigned, toReview } = await getWorkFor(viewing.id);
 
   return (
-    <>
-      <div className="flex flex-col gap-2">
-        <span className="font-label text-[13px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          DrupalAsia Connect India 2027
-        </span>
-        <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">Content board</h1>
-      </div>
-      <KanbanBoard initialItems={content} team={team} me={profile} campaigns={campaigns} counts={counts} />
-    </>
+    <MyWork
+      me={me}
+      viewing={viewing}
+      team={isOwner ? team : []}
+      assigned={assigned}
+      toReview={toReview}
+      campaigns={campaigns}
+    />
   );
 }

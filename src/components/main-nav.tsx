@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Board" },
+  { href: "/", label: "My work" },
+  { href: "/board", label: "Board" },
   { href: "/calendar", label: "Calendar" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/guidelines", label: "Content guidelines" },
@@ -18,7 +19,11 @@ export function MainNav() {
     <nav aria-label="Main" className="flex gap-1">
       {LINKS.map((l) => {
         const active =
-          l.href === "/" ? pathname === "/" || /^\/content\/(?!new)/.test(pathname) : pathname.startsWith(l.href);
+          l.href === "/"
+            ? pathname === "/"
+            : l.href === "/board"
+              ? pathname.startsWith("/board") || /^\/content\/(?!new)/.test(pathname)
+              : pathname.startsWith(l.href);
         return (
           <Link
             key={l.href}

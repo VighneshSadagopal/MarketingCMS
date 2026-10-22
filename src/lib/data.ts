@@ -142,3 +142,20 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
   if (error) throw new Error(error.message);
   return (data as TeamMember[]) ?? [];
 }
+
+/** Posts assigned to one person, and posts waiting for their review. */
+export async function getWorkFor(userId: string): Promise<{ assigned: Content[]; toReview: Content[] }> {
+  const supabase = await createClient();
+  const [assigned, toReview] = await Promise.all([
+    supabase.from("content").select("*").eq("assignee_id", userId).order("publish_at", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("content")
+      .select("*")
+      .eq("reviewer_id", userId)
+      .eq("status", "ready_for_review")
+      .order("publish_at", { ascending: true, nullsFirst: false }),
+  ]);
+  if (assigned.error) throw new Error(assigned.error.message);
+  if (toReview.error) throw new Error(toReview.error.message);
+  return { assigned: (assigned.data as Content[]) ?? [], toReview: (toReview.data as Content[]) ?? [] };
+}

@@ -465,7 +465,7 @@ export function ContentForm({
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="ghost" asChild>
-            <Link href={editing ? `/content/${initial?.id}` : "/"}>Cancel</Link>
+            <Link href={editing ? `/content/${initial?.id}` : "/board"}>Cancel</Link>
           </Button>
           <Button type="submit" disabled={saving}>
             {saving ? "Saving…" : editing ? "Save changes" : "Create content"}

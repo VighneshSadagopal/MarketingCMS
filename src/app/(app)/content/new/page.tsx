@@ -15,7 +15,7 @@ export default async function NewContentPage({
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm font-semibold">
-        <Link href="/" className="text-blue-600">
+        <Link href="/board" className="text-blue-600">
           Board
         </Link>
         <span aria-hidden className="text-muted-foreground">

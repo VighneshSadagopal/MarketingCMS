@@ -6,7 +6,8 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 
 ## Features
 
-- **Kanban board** with six columns: Todo, Changes suggested, In progress, Ready for review, Ready for schedule, Done / Posted. Drag cards between columns. Only the owner can move cards into Ready for schedule or Done / Posted (enforced in the UI, the server action and a database trigger).
+- **My work (homepage, `/`)**: each person's dashboard of their assigned posts: Assigned, Open, Completed and Overdue counts, an "Up next" list (overdue first, then soonest target) with deadline labels, posts waiting for their review, a progress bar with posts per stage, and their completed posts. The owner can switch to any team member's view.
+- **Kanban board** (`/board`) with six columns: Todo, Changes suggested, In progress, Ready for review, Ready for schedule, Done / Posted. Drag cards between columns. Only the owner can move cards into Ready for schedule or Done / Posted (enforced in the UI, the server action and a database trigger).
 - **Deadlines**: a post should be in Ready for review at least 48 hours before its target time, and in Ready for schedule at least 12 hours before. Board cards and the content page show "Review due in …" / "Scheduling due in …" as a deadline approaches (from 72 and 24 hours out), and a red "… overdue by …" label once it's missed, or "Past target date" if the post isn't posted by its target time. Rules live in `src/lib/deadlines.ts`.
 - **Content detail** with LinkedIn, X and Instagram post previews using the uploaded images, shown whole at their full height (Instagram shows them as a carousel).
 - **Content form**: copy per platform, hashtags, link, up to 4 images shared by all platforms, assignee, reviewer, target publish date and time. X copy is limited to 280 characters; links (http://, https://, www.) don't count (checked in the form and by a database constraint).
@@ -55,7 +56,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 ```
 src/
   app/
-    (app)/            signed-in pages: board, calendar, campaigns, content, guidelines, profile
+    (app)/            signed-in pages: my work (/), board, calendar, campaigns, content, guidelines, team, profile
     auth/callback/    magic link and email confirmation handler
     login/            sign in / create account
   components/
