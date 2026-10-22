@@ -4,7 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Campaign, Content, PostIdea, Profile } from "@/lib/types";
+import type { Campaign, CommentCounts, Content, ContentComment, PostIdea, Profile } from "@/lib/types";
 
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
@@ -101,4 +101,32 @@ export async function getCampaignContent(id: string): Promise<Content[]> {
     .order("publish_at", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
   return (data as Content[]) ?? [];
+}
+
+export async function getComments(contentId: string): Promise<ContentComment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("content_comments")
+    .select("*")
+    .eq("content_id", contentId)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return (data as ContentComment[]) ?? [];
+}
+
+/** Comment and open change-request counts for every card, keyed by content id. */
+export async function getCommentCounts(): Promise<Record<string, CommentCounts>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("content_comments")
+    .select("content_id, kind, resolved")
+    .in("kind", ["comment", "change_request"]);
+  if (error) throw new Error(error.message);
+  const counts: Record<string, CommentCounts> = {};
+  for (const r of (data ?? []) as Pick<ContentComment, "content_id" | "kind" | "resolved">[]) {
+    const c = (counts[r.content_id] ??= { comments: 0, openRequests: 0 });
+    c.comments += 1;
+    if (r.kind === "change_request" && !r.resolved) c.openRequests += 1;
+  }
+  return counts;
 }

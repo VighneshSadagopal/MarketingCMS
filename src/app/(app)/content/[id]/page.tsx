@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
+import { ActivityFeed } from "@/components/content/activity-feed";
 import { SocialPreviews } from "@/components/content/social-previews";
 import { StatusActions } from "@/components/content/status-actions";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
-import { getCampaigns, getContent, getCurrentProfile, getTeam } from "@/lib/data";
+import { getCampaigns, getComments, getContent, getCurrentProfile, getTeam } from "@/lib/data";
 import { publicImageUrl } from "@/lib/supabase/client";
 import { platformLabel, statusMeta, type Profile } from "@/lib/types";
 
@@ -41,13 +42,21 @@ function Person({ label, profile, suffix }: { label: string; profile?: Profile; 
   );
 }
 
-export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ suggest?: string }>;
+}) {
   const { id } = await params;
-  const [me, team, item, campaigns] = await Promise.all([
+  const { suggest } = await searchParams;
+  const [me, team, item, campaigns, comments] = await Promise.all([
     getCurrentProfile(),
     getTeam(),
     getContent(id),
     getCampaigns(),
+    getComments(id),
   ]);
   if (!item) notFound();
 
@@ -59,6 +68,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const imageUrls = item.images.map((p) => publicImageUrl("content-images", p));
   const isOwner = me.role === "owner";
   const campaign = item.campaign_id ? campaigns.find((c) => c.id === item.campaign_id) : undefined;
+  const openRequests = comments.filter((c) => c.kind === "change_request" && !c.resolved);
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
@@ -93,10 +103,20 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
             </Link>
           ) : null}
           {item.brief ? <p className="max-w-3xl text-sm text-muted-foreground">{item.brief}</p> : null}
+          {openRequests.length ? (
+            <a
+              href="#activity"
+              className="flex items-center gap-2 self-start rounded-md border-l-4 border-orange-500 bg-orange-500/10 px-3 py-2 text-sm font-bold text-navy-800 no-underline"
+            >
+              <PencilLine className="size-4 text-orange-500" strokeWidth={2.5} aria-hidden />
+              {openRequests.length} open change {openRequests.length === 1 ? "request" : "requests"}: see review notes
+            </a>
+          ) : null}
         </div>
         <StatusActions
           id={item.id}
           status={item.status}
+          openSuggest={suggest === "1"}
           isOwner={isOwner}
           canDelete={isOwner || item.author_id === me.id}
         />
@@ -124,6 +144,8 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       </dl>
 
       <SocialPreviews item={item} imageUrls={imageUrls} />
+
+      <ActivityFeed contentId={item.id} comments={comments} team={team} me={me} />
     </div>
   );
 }

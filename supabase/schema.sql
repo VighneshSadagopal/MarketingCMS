@@ -381,3 +381,91 @@ end;
 $$;
 
 grant execute on function public.create_post_idea(date, text, text[], uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Comments, change requests and status history on each post.
+-- ---------------------------------------------------------------------------
+create table if not exists public.content_comments (
+  id uuid primary key default gen_random_uuid(),
+  content_id uuid not null references public.content (id) on delete cascade,
+  author_id uuid default auth.uid() references public.profiles (id) on delete set null,
+  kind text not null default 'comment' check (kind in ('comment', 'change_request', 'status')),
+  body text not null check (char_length(body) between 1 and 2000),
+  resolved boolean not null default false,
+  resolved_by uuid references public.profiles (id) on delete set null,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists content_comments_content_idx on public.content_comments (content_id, created_at);
+
+alter table public.content_comments enable row level security;
+
+drop policy if exists "comments readable by team" on public.content_comments;
+create policy "comments readable by team" on public.content_comments
+  for select to authenticated using (true);
+
+-- People write comments and change requests as themselves; status entries come from the trigger.
+drop policy if exists "team writes comments" on public.content_comments;
+create policy "team writes comments" on public.content_comments
+  for insert to authenticated
+  with check (author_id = auth.uid() and kind in ('comment', 'change_request'));
+
+-- Anyone on the team can resolve or reopen a change request.
+drop policy if exists "team resolves change requests" on public.content_comments;
+create policy "team resolves change requests" on public.content_comments
+  for update to authenticated
+  using (kind = 'change_request')
+  with check (kind = 'change_request');
+
+drop policy if exists "authors delete own comments" on public.content_comments;
+create policy "authors delete own comments" on public.content_comments
+  for delete to authenticated
+  using (kind <> 'status' and (author_id = auth.uid() or public.is_owner()));
+
+-- Record every status change in the post's activity.
+create or replace function public.content_log_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  labels jsonb := '{"todo":"Todo","changes_suggested":"Changes suggested","in_progress":"In progress",
+    "ready_for_review":"Ready for review","ready_for_schedule":"Ready for schedule","done":"Done / Posted"}';
+begin
+  if new.status is distinct from old.status then
+    insert into public.content_comments (content_id, author_id, kind, body)
+    values (new.id, auth.uid(), 'status',
+            'moved this from ' || (labels ->> old.status::text) || ' to ' || (labels ->> new.status::text));
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists content_log_status on public.content;
+create trigger content_log_status
+  after update of status on public.content
+  for each row execute function public.content_log_status();
+
+-- Suggest changes: saves the note as a change request and moves the card, together.
+create or replace function public.suggest_changes(p_content_id uuid, p_note text)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if p_note is null or btrim(p_note) = '' then
+    raise exception 'Describe the changes you are suggesting.' using errcode = '22023';
+  end if;
+
+  insert into public.content_comments (content_id, author_id, kind, body)
+  values (p_content_id, auth.uid(), 'change_request', btrim(p_note));
+
+  update public.content set status = 'changes_suggested'
+  where id = p_content_id and status <> 'changes_suggested';
+end;
+$$;
+
+grant execute on function public.suggest_changes(uuid, text) to authenticated;

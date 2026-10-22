@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -26,6 +27,7 @@ import {
   PLATFORMS,
   STATUSES,
   type Campaign,
+  type CommentCounts,
   type Content,
   type ContentStatus,
   type Profile,
@@ -37,12 +39,15 @@ export function KanbanBoard({
   team,
   me,
   campaigns,
+  counts,
 }: {
   initialItems: Content[];
   team: Profile[];
   me: Profile;
   campaigns: Campaign[];
+  counts: Record<string, CommentCounts>;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [syncedFrom, setSyncedFrom] = useState(initialItems);
   const [query, setQuery] = useState("");
@@ -90,6 +95,12 @@ export function KanbanBoard({
 
     if (!isOwner && OWNER_ONLY_STATUSES.includes(target)) {
       toast.error("Only the owner can move content to that column.");
+      return;
+    }
+
+    // Suggesting changes needs a note, so open the post with the note box ready.
+    if (target === "changes_suggested") {
+      router.push(`/content/${id}?suggest=1`);
       return;
     }
 
@@ -193,6 +204,7 @@ export function KanbanBoard({
                 items={visible.filter((c) => c.status === s.id).sort((a, b) => a.position - b.position)}
                 teamById={teamById}
                 campaignById={campaignById}
+                counts={counts}
                 activeId={activeId}
               />
             ))}
@@ -221,6 +233,7 @@ function Column({
   items,
   teamById,
   campaignById,
+  counts,
   activeId,
 }: {
   status: ContentStatus;
@@ -230,6 +243,7 @@ function Column({
   items: Content[];
   teamById: Map<string, Profile>;
   campaignById: Map<string, Campaign>;
+  counts: Record<string, CommentCounts>;
   activeId: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status, disabled: locked });
@@ -272,6 +286,7 @@ function Column({
           item={c}
           teamById={teamById}
           campaign={c.campaign_id ? campaignById.get(c.campaign_id) : undefined}
+          counts={counts[c.id]}
           dimmed={activeId === c.id}
         />
       ))}

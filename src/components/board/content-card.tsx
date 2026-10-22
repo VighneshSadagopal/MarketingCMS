@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
-import { CalendarDays, Images } from "lucide-react";
+import { CalendarDays, Images, MessageCircle, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { publicImageUrl } from "@/lib/supabase/client";
-import { platformLabel, type Campaign, type Content, type Profile } from "@/lib/types";
+import { platformLabel, type Campaign, type CommentCounts, type Content, type Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -32,12 +32,14 @@ export function ContentCard({
   item,
   teamById,
   campaign,
+  counts,
   overlay = false,
   dimmed = false,
 }: {
   item: Content;
   teamById: Map<string, Profile>;
   campaign?: Campaign;
+  counts?: CommentCounts;
   overlay?: boolean;
   dimmed?: boolean;
 }) {
@@ -82,10 +84,22 @@ export function ContentCard({
       ) : null}
       <span className="text-[15px] leading-snug font-bold">{item.title}</span>
       {campaign ? <CampaignTag campaign={campaign} className="self-start" /> : null}
+      {counts?.openRequests ? (
+        <span className="flex items-center gap-1.5 rounded-sm bg-orange-500/10 px-2 py-1.5 text-[13px] font-semibold">
+          <PencilLine className="size-3.5 text-orange-500" strokeWidth={2.5} aria-hidden />
+          {counts.openRequests} {counts.openRequests === 1 ? "change" : "changes"} requested
+        </span>
+      ) : null}
       <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
         <span className="flex items-center gap-1 text-[13px] font-semibold text-muted-foreground">
           <CalendarDays className="size-3.5 text-blue-600" strokeWidth={2.5} aria-hidden />
           {dateLabel(item)}
+          {counts?.comments ? (
+            <span className="ml-2 flex items-center gap-1" aria-label={`${counts.comments} comments`}>
+              <MessageCircle className="size-3.5 text-blue-600" strokeWidth={2.5} aria-hidden />
+              {counts.comments}
+            </span>
+          ) : null}
         </span>
         <span className="flex">
           {people.map((p) => (

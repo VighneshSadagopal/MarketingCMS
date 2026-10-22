@@ -125,3 +125,20 @@ export function campaignDateRange(c: Pick<Campaign, "start_date" | "end_date">) 
   if (c.end_date) return `Until ${f(c.end_date)}`;
   return "No dates set";
 }
+
+export type CommentKind = "comment" | "change_request" | "status";
+
+export type ContentComment = {
+  id: string;
+  content_id: string;
+  author_id: string | null;
+  kind: CommentKind;
+  body: string;
+  resolved: boolean;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+};
+
+/** Per-card counts shown on the board. */
+export type CommentCounts = { comments: number; openRequests: number };
