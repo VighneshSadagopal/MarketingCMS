@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { friendlyDbError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/server";
 import { OWNER_ONLY_STATUSES, STATUSES, type ContentStatus } from "@/lib/types";
 
@@ -27,7 +28,7 @@ export async function updateContentStatus(id: string, status: string, position?:
   if (typeof position === "number") patch.position = position;
 
   const { error } = await supabase.from("content").update(patch).eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
 
   revalidatePath("/");
   revalidatePath(`/content/${id}`);

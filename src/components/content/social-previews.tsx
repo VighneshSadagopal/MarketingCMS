@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X_WORD_LIMIT, type Content, type Platform } from "@/lib/types";
-import { cn, countWords } from "@/lib/utils";
+import { X_CHAR_LIMIT, type Content, type Platform } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Props = { item: Content; imageUrls: string[] };
 
@@ -52,28 +52,23 @@ function NoImages({ className }: { className?: string }) {
   );
 }
 
-/** Grid used by LinkedIn and X for 1 to 4 images. */
+/**
+ * Images for LinkedIn and X, shown whole at their own height (never cropped).
+ * One image fills the width; two to four sit in two columns, with an odd first image spanning both.
+ * `aspect` only sizes the empty placeholder.
+ */
 function ImageGrid({ urls, aspect, rounded }: { urls: string[]; aspect: string; rounded?: string }) {
   if (urls.length === 0) return <NoImages className={cn(aspect, rounded)} />;
   const n = urls.length;
   return (
-    <div
-      className={cn(
-        "grid gap-0.5 overflow-hidden bg-white",
-        aspect,
-        rounded,
-        n === 1 && "grid-cols-1",
-        n === 2 && "grid-cols-2",
-        n >= 3 && "grid-cols-2 grid-rows-2"
-      )}
-    >
+    <div className={cn("grid items-start gap-0.5 overflow-hidden bg-white", rounded, n > 1 && "grid-cols-2")}>
       {urls.map((u, i) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={u}
           src={u}
           alt={`Image ${i + 1}`}
-          className={cn("size-full min-h-0 object-cover", n === 3 && i === 0 && "row-span-2")}
+          className={cn("block h-auto w-full", n % 2 === 1 && n > 1 && i === 0 && "col-span-2")}
         />
       ))}
     </div>
@@ -172,12 +167,13 @@ function InstagramPreview({ item, imageUrls }: Props) {
         </div>
         <MoreHorizontal className="size-5" role="img" aria-label="More options" />
       </div>
-      <div className="relative aspect-square bg-navy-900">
+      {/* Each image shows whole at its own height; the carousel grows or shrinks to fit it. */}
+      <div className={cn("relative bg-navy-900", n === 0 && "aspect-square")}>
         {n === 0 ? (
           <NoImages className="size-full" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrls[current]} alt={`Image ${current + 1} of ${n}`} className="size-full object-cover" />
+          <img src={imageUrls[current]} alt={`Image ${current + 1} of ${n}`} className="block h-auto w-full" />
         )}
         {n > 1 ? (
           <>
@@ -243,7 +239,7 @@ function PreviewColumn({ p, item, imageUrls }: Props & { p: Platform }) {
         <h3 className="text-base font-extrabold">{PREVIEWS[p].label}</h3>
         {p === "x" ? (
           <span className="text-[13px] font-semibold text-muted-foreground">
-            {countWords(item.copy_x)} / {X_WORD_LIMIT} words
+            {(item.copy_x ?? "").trim().length} / {X_CHAR_LIMIT} characters
           </span>
         ) : null}
       </div>

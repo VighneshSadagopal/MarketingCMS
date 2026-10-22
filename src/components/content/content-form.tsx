@@ -13,11 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { friendlyDbError } from "@/lib/errors";
 import { createClient, publicImageUrl } from "@/lib/supabase/client";
 import {
   MAX_IMAGES,
   PLATFORMS,
-  X_WORD_LIMIT,
+  X_CHAR_LIMIT,
   campaignDateRange,
   type Campaign,
   type Content,
@@ -25,7 +26,6 @@ import {
   type Platform,
   type Profile,
 } from "@/lib/types";
-import { countWords } from "@/lib/utils";
 
 type ImageItem =
   | { kind: "stored"; path: string; url: string }
@@ -105,8 +105,8 @@ export function ContentForm({
     if (!link.trim() && next.default_link) setLink(next.default_link);
   }
 
-  const xWords = countWords(copy.x);
-  const xOver = xWords > X_WORD_LIMIT;
+  const xChars = copy.x.trim().length;
+  const xOver = xChars > X_CHAR_LIMIT;
   const xOn = platforms.includes("x");
   const selected = useMemo(() => PLATFORMS.filter((p) => platforms.includes(p.id)), [platforms]);
 
@@ -143,7 +143,7 @@ export function ContentForm({
     for (const p of selected) {
       if (!copy[p.id].trim()) return toast.error(`Write the ${p.label} copy.`);
     }
-    if (xOn && xOver) return toast.error(`X copy is over ${X_WORD_LIMIT} words.`);
+    if (xOn && xOver) return toast.error(`X copy is over ${X_CHAR_LIMIT} characters.`);
     if (campaign && date) {
       if ((campaign.start_date && date < campaign.start_date) || (campaign.end_date && date > campaign.end_date)) {
         return toast.error(`Pick a date within the campaign: ${campaignDateRange(campaign)}.`);
@@ -208,7 +208,7 @@ export function ContentForm({
       router.refresh();
     } catch (err) {
       if (uploaded.length) await supabase.storage.from("content-images").remove(uploaded);
-      toast.error(err instanceof Error ? err.message : "Could not save content.");
+      toast.error(err instanceof Error ? friendlyDbError(err.message) : "Could not save content.");
       setSaving(false);
     }
   }
@@ -319,7 +319,7 @@ export function ContentForm({
                       aria-live="polite"
                       className={xOver ? "text-sm font-bold text-navy-800" : "text-sm font-medium text-muted-foreground"}
                     >
-                      {xWords} / {X_WORD_LIMIT} words
+                      {xChars} / {X_CHAR_LIMIT} characters
                     </span>
                   ) : null}
                 </div>
@@ -475,31 +475,31 @@ export function ContentForm({
       <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4 lg:sticky lg:top-6">
         <Card aria-labelledby="xlimit-h">
           <h2 id="xlimit-h" className="text-xl font-extrabold">
-            X word limit
+            X character limit
           </h2>
           {xOn ? (
             <div className="flex flex-col gap-2">
               <div className="flex justify-between gap-2 text-sm">
                 <span className="font-bold">X copy</span>
                 <span className="font-semibold">
-                  {xWords} / {X_WORD_LIMIT} words
+                  {xChars} / {X_CHAR_LIMIT} characters
                 </span>
               </div>
               <div aria-hidden className="h-2 overflow-hidden rounded-full bg-ice-100">
                 <div
                   className={xOver ? "h-full rounded-full bg-orange-500" : "h-full rounded-full bg-blue-600"}
-                  style={{ width: `${Math.min(100, Math.round((xWords / X_WORD_LIMIT) * 100))}%` }}
+                  style={{ width: `${Math.min(100, Math.round((xChars / X_CHAR_LIMIT) * 100))}%` }}
                 />
               </div>
               {xOver ? (
                 <span className="flex items-center gap-1.5 text-[13px] font-bold">
                   <AlertTriangle className="size-4 text-orange-500" strokeWidth={2.5} aria-hidden />
-                  Over by {xWords - X_WORD_LIMIT} words
+                  Over by {xChars - X_CHAR_LIMIT} characters
                 </span>
               ) : null}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Select X to check the word limit.</p>
+            <p className="text-sm text-muted-foreground">Select X to check the character limit.</p>
           )}
         </Card>
         <section className="night flex flex-col gap-3 rounded-2xl bg-navy-900 p-6 text-white">

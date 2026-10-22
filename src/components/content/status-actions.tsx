@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { friendlyDbError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/client";
 import { OWNER_ONLY_STATUSES, STATUSES, type ContentStatus } from "@/lib/types";
 
@@ -56,7 +57,7 @@ export function StatusActions({
       // Saves the note as a change request and moves the card to Changes suggested together.
       const { error } = await createClient().rpc("suggest_changes", { p_content_id: id, p_note: text });
       if (error) {
-        toast.error(error.message);
+        toast.error(friendlyDbError(error.message));
         return;
       }
       setNote("");

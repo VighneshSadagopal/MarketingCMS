@@ -5,11 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function countWords(text: string | null | undefined): number {
-  if (!text) return 0;
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
 export function initials(name: string | null | undefined, fallback = "?"): string {
   if (!name) return fallback;
   const parts = name.trim().split(/\s+/).filter(Boolean);

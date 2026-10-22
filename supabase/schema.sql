@@ -94,21 +94,14 @@ create table if not exists public.content (
 create index if not exists content_status_idx on public.content (status, position);
 create index if not exists content_publish_at_idx on public.content (publish_at);
 
--- X copy is limited to 200 words.
-create or replace function public.word_count(t text)
-returns integer
-language sql
-immutable
-as $$
-  select case
-    when t is null or btrim(t) = '' then 0
-    else array_length(regexp_split_to_array(btrim(t), '\s+'), 1)
-  end;
-$$;
+-- X copy is limited to 200 characters.
+-- (Earlier versions limited it to 200 words; that rule and its helper are removed here.)
+alter table public.content drop constraint if exists content_copy_x_words;
+drop function if exists public.word_count(text);
 
 do $$ begin
   alter table public.content
-    add constraint content_copy_x_words check (public.word_count(copy_x) <= 200);
+    add constraint content_copy_x_chars check (copy_x is null or char_length(copy_x) <= 200) not valid;
 exception when duplicate_object then null; end $$;
 
 -- Only the owner can move content into Ready for schedule or Done / Posted.

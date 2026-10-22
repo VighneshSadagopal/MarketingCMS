@@ -28,7 +28,8 @@ export function platformLabel(id: string) {
   return PLATFORMS.find((p) => p.id === id)?.label ?? id;
 }
 
-export const X_WORD_LIMIT = 200;
+/** X copy is limited to 200 characters. */
+export const X_CHAR_LIMIT = 200;
 export const MAX_IMAGES = 4;
 
 export type Role = "owner" | "member";
