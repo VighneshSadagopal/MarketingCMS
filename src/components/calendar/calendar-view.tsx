@@ -76,10 +76,6 @@ export function CalendarView({
   const postsById = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts]);
   const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns]);
 
-  /** Campaigns whose date range covers the given day. */
-  const campaignsOn = (iso: string) =>
-    campaigns.filter((c) => c.start_date && c.end_date && c.start_date <= iso && iso <= c.end_date);
-
   const postsByDate = useMemo(() => {
     // A card created from an idea shows as that idea, not twice.
     // If the card was rescheduled to another date, it shows there as a planned post.
@@ -93,6 +89,16 @@ export function CalendarView({
     }
     return map;
   }, [posts, ideas]);
+
+  /** Campaigns with a post or idea due on the given day (not every day in the campaign's range). */
+  const campaignsOn = (iso: string) => {
+    const ids = new Set(
+      [...(postsByDate.get(iso) ?? []), ...(ideasByDate.get(iso) ?? [])]
+        .map((x) => x.campaign_id)
+        .filter((id): id is string => !!id)
+    );
+    return campaigns.filter((c) => ids.has(c.id));
+  };
 
   const cells = useMemo(() => {
     const first = new Date(year, month, 1);
@@ -115,11 +121,9 @@ export function CalendarView({
   });
   const selPosts = postsByDate.get(selected) ?? [];
   const selIdeas = ideasByDate.get(selected) ?? [];
-  const gridFirst = cells[0]?.iso ?? firstIso;
-  const gridLast = cells[cells.length - 1]?.iso ?? firstIso;
-  const monthCampaigns = campaigns.filter(
-    (c) => c.start_date && c.end_date && c.start_date <= gridLast && c.end_date >= gridFirst
-  );
+  // Campaigns with something due in the visible weeks.
+  const visibleIds = new Set(cells.flatMap((c) => campaignsOn(c.iso).map((x) => x.id)));
+  const monthCampaigns = campaigns.filter((c) => visibleIds.has(c.id));
 
   function addIdea(e: React.FormEvent) {
     e.preventDefault();
