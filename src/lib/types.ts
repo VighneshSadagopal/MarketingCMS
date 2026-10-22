@@ -28,8 +28,19 @@ export function platformLabel(id: string) {
   return PLATFORMS.find((p) => p.id === id)?.label ?? id;
 }
 
-/** X copy is limited to 200 characters. */
+/** X copy is limited to 200 characters. Links don't count towards it. */
 export const X_CHAR_LIMIT = 200;
+
+const LINK_PATTERN = /(https?:\/\/|www\.)\S+/gi;
+
+/**
+ * Characters that count towards the X limit: the copy with any links taken out.
+ * Must match the content_copy_x_chars rule in supabase/schema.sql.
+ */
+export function xCharCount(text: string | null | undefined): number {
+  if (!text) return 0;
+  return text.replace(LINK_PATTERN, "").trim().length;
+}
 export const MAX_IMAGES = 4;
 
 export type Role = "owner" | "member";

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X_CHAR_LIMIT, type Content, type Platform } from "@/lib/types";
+import { X_CHAR_LIMIT, xCharCount, type Content, type Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = { item: Content; imageUrls: string[] };
@@ -239,7 +239,7 @@ function PreviewColumn({ p, item, imageUrls }: Props & { p: Platform }) {
         <h3 className="text-base font-extrabold">{PREVIEWS[p].label}</h3>
         {p === "x" ? (
           <span className="text-[13px] font-semibold text-muted-foreground">
-            {(item.copy_x ?? "").trim().length} / {X_CHAR_LIMIT} characters
+            {xCharCount(item.copy_x)} / {X_CHAR_LIMIT} characters
           </span>
         ) : null}
       </div>

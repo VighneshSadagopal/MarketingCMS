@@ -94,15 +94,26 @@ create table if not exists public.content (
 create index if not exists content_status_idx on public.content (status, position);
 create index if not exists content_publish_at_idx on public.content (publish_at);
 
--- X copy is limited to 200 characters.
+-- X copy is limited to 200 characters; links (http://, https://, www.) don't count.
+-- Must match xCharCount() in src/lib/types.ts.
 -- (Earlier versions limited it to 200 words; that rule and its helper are removed here.)
 alter table public.content drop constraint if exists content_copy_x_words;
 drop function if exists public.word_count(text);
 
-do $$ begin
-  alter table public.content
-    add constraint content_copy_x_chars check (copy_x is null or char_length(copy_x) <= 200) not valid;
-exception when duplicate_object then null; end $$;
+create or replace function public.x_char_count(t text)
+returns integer
+language sql
+immutable
+as $$
+  select coalesce(
+    char_length(btrim(regexp_replace(t, '(https?://|www\.)\S+', '', 'gi'), E' \t\r\n')),
+    0
+  );
+$$;
+
+alter table public.content drop constraint if exists content_copy_x_chars;
+alter table public.content
+  add constraint content_copy_x_chars check (public.x_char_count(copy_x) <= 200) not valid;
 
 -- Only the owner can move content into Ready for schedule or Done / Posted.
 create or replace function public.content_before_update()

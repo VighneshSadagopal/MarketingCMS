@@ -19,6 +19,7 @@ import {
   MAX_IMAGES,
   PLATFORMS,
   X_CHAR_LIMIT,
+  xCharCount,
   campaignDateRange,
   type Campaign,
   type Content,
@@ -105,7 +106,7 @@ export function ContentForm({
     if (!link.trim() && next.default_link) setLink(next.default_link);
   }
 
-  const xChars = copy.x.trim().length;
+  const xChars = xCharCount(copy.x);
   const xOver = xChars > X_CHAR_LIMIT;
   const xOn = platforms.includes("x");
   const selected = useMemo(() => PLATFORMS.filter((p) => platforms.includes(p.id)), [platforms]);
@@ -497,6 +498,9 @@ export function ContentForm({
                   Over by {xChars - X_CHAR_LIMIT} characters
                 </span>
               ) : null}
+              <p className="text-[13px] text-muted-foreground">
+                Links in the copy, the Link field and hashtags don&apos;t count.
+              </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Select X to check the character limit.</p>
