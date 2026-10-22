@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
-import { CalendarDays, Images, MessageCircle, PencilLine } from "lucide-react";
+import { CalendarDays, MessageCircle, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { UserAvatar } from "@/components/user-avatar";
-import { Badge } from "@/components/ui/badge";
-import { publicImageUrl } from "@/lib/supabase/client";
-import { platformLabel, type Campaign, type CommentCounts, type Content, type Profile } from "@/lib/types";
+import type { Campaign, CommentCounts, Content, Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -48,7 +46,6 @@ export function ContentCard({
     .filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i)
     .map((id) => teamById.get(id))
     .filter((p): p is Profile => !!p);
-  const cover = item.images[0];
 
   return (
     <Link
@@ -63,25 +60,6 @@ export function ContentCard({
         dimmed && "opacity-40"
       )}
     >
-      {cover ? (
-        <div className="relative h-24 overflow-hidden rounded-md bg-navy-900">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={publicImageUrl("content-images", cover)} alt="" className="size-full object-cover" />
-          {item.images.length > 1 ? (
-            <span className="absolute right-2 bottom-2 flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-bold">
-              <Images className="size-3" aria-hidden />
-              {item.images.length}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      {item.platforms.length ? (
-        <div className="flex flex-wrap gap-1.5">
-          {item.platforms.map((p) => (
-            <Badge key={p}>{platformLabel(p)}</Badge>
-          ))}
-        </div>
-      ) : null}
       <span className="text-[15px] leading-snug font-bold">{item.title}</span>
       {campaign ? <CampaignTag campaign={campaign} className="self-start" /> : null}
       {counts?.openRequests ? (
