@@ -5,6 +5,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CalendarDays, MessageCircle, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
+import { DeadlineLabel } from "@/components/content/deadline-label";
 import { UserAvatar } from "@/components/user-avatar";
 import type { Campaign, CommentCounts, Content, Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function ContentCard({
     >
       <span className="text-[15px] leading-snug font-bold">{item.title}</span>
       {campaign ? <CampaignTag campaign={campaign} className="self-start" /> : null}
+      <DeadlineLabel item={item} />
       {counts?.openRequests ? (
         <span className="flex items-center gap-1.5 rounded-sm bg-orange-500/10 px-2 py-1.5 text-[13px] font-semibold">
           <PencilLine className="size-3.5 text-orange-500" strokeWidth={2.5} aria-hidden />

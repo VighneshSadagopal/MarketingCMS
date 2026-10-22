@@ -4,6 +4,7 @@ import { CalendarDays, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { ActivityFeed } from "@/components/content/activity-feed";
+import { DeadlineLabel } from "@/components/content/deadline-label";
 import { SocialPreviews } from "@/components/content/social-previews";
 import { StatusActions } from "@/components/content/status-actions";
 import { UserAvatar } from "@/components/user-avatar";
@@ -102,6 +103,7 @@ export default async function ContentDetailPage({
               <CampaignTag campaign={campaign} className="px-3 py-1 text-[13px] hover:border-input" />
             </Link>
           ) : null}
+          <DeadlineLabel item={item} showDetail className="self-start" />
           {item.brief ? <p className="max-w-3xl text-sm text-muted-foreground">{item.brief}</p> : null}
           {openRequests.length ? (
             <a
