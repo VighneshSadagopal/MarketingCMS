@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, LogOut, UserRound, Users } from "lucide-react";
 
 import { UserAvatar } from "@/components/user-avatar";
 import {
@@ -53,6 +53,13 @@ export function UserMenu({ profile }: { profile: Profile }) {
             <UserRound /> Profile and avatar
           </Link>
         </DropdownMenuItem>
+        {profile.role === "owner" ? (
+          <DropdownMenuItem asChild>
+            <Link href="/team">
+              <Users /> Team access
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={signOut}>
           <LogOut /> Sign out
         </DropdownMenuItem>

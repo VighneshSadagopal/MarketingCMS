@@ -473,3 +473,158 @@ end;
 $$;
 
 grant execute on function public.suggest_changes(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Google sign-in with an owner-managed allowlist.
+-- Only emails on public.allowed_emails can create an account (see the
+-- "Before user created" auth hook below). The owner adds and removes emails.
+-- ---------------------------------------------------------------------------
+create table if not exists public.allowed_emails (
+  email text primary key check (email = lower(btrim(email)) and email like '%_@_%'),
+  role public.user_role not null default 'member',
+  added_by uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.allowed_emails enable row level security;
+
+drop policy if exists "owner reads allowlist" on public.allowed_emails;
+create policy "owner reads allowlist" on public.allowed_emails
+  for select to authenticated using (public.is_owner());
+
+drop policy if exists "owner adds emails" on public.allowed_emails;
+create policy "owner adds emails" on public.allowed_emails
+  for insert to authenticated with check (public.is_owner() and role = 'member');
+
+-- The auth hook runs as supabase_auth_admin and needs to read the list.
+grant select on public.allowed_emails to supabase_auth_admin;
+drop policy if exists "auth hook reads allowlist" on public.allowed_emails;
+create policy "auth hook reads allowlist" on public.allowed_emails
+  for select to supabase_auth_admin using (true);
+
+-- The owner, plus everyone who already has an account, stays allowed.
+insert into public.allowed_emails (email, role)
+values ('vighneshp65@gmail.com', 'owner')
+on conflict (email) do update set role = 'owner';
+
+update public.profiles set role = 'owner'
+where id in (select id from auth.users where lower(email) = 'vighneshp65@gmail.com');
+
+insert into public.allowed_emails (email, role)
+select lower(u.email), coalesce(p.role, 'member')
+from auth.users u left join public.profiles p on p.id = u.id
+where u.email is not null
+on conflict (email) do nothing;
+
+-- New accounts take their role from the allowlist, and their name and photo from Google.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, avatar_url, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data ->> 'avatar_url',
+    coalesce((select a.role from public.allowed_emails a where a.email = lower(new.email)), 'member')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- Auth hook: refuse to create an account for an email that isn't on the allowlist.
+-- Enable it in Supabase: Authentication > Hooks > Before User Created > Postgres > public.hook_before_user_created.
+create or replace function public.hook_before_user_created(event jsonb)
+returns jsonb
+language plpgsql
+stable
+set search_path = public
+as $$
+declare
+  v_email text := lower(event -> 'user' ->> 'email');
+begin
+  if v_email is null or not exists (select 1 from public.allowed_emails where email = v_email) then
+    return jsonb_build_object('error', jsonb_build_object(
+      'http_code', 403,
+      'message', 'This Google account is not on the DrupalAsia Marketing CMS team list. Ask the owner to add it.'
+    ));
+  end if;
+  return '{}'::jsonb;
+end;
+$$;
+
+grant execute on function public.hook_before_user_created(jsonb) to supabase_auth_admin;
+revoke execute on function public.hook_before_user_created(jsonb) from authenticated, anon, public;
+
+-- Is the signed-in user still on the allowlist? (Checked by the app on every sign-in.)
+create or replace function public.am_i_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.allowed_emails a join auth.users u on lower(u.email) = a.email
+    where u.id = auth.uid()
+  );
+$$;
+
+grant execute on function public.am_i_allowed() to authenticated;
+
+-- Owner view of the team: every allowed email, whether they've signed in yet, and their name.
+create or replace function public.team_members()
+returns table (email text, role public.user_role, added_at timestamptz, joined boolean, user_id uuid, full_name text, avatar_url text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Only the owner can see the team list.' using errcode = '42501';
+  end if;
+  return query
+    select a.email, a.role, a.created_at, u.id is not null, u.id, p.full_name, p.avatar_url
+    from public.allowed_emails a
+    left join auth.users u on lower(u.email) = a.email
+    left join public.profiles p on p.id = u.id
+    order by (a.role = 'owner') desc, a.created_at;
+end;
+$$;
+
+grant execute on function public.team_members() to authenticated;
+
+-- Owner removes someone: they leave the allowlist and their login is deleted.
+-- Their posts, ideas and comments stay; the author shows as removed.
+create or replace function public.remove_team_member(p_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(btrim(p_email));
+begin
+  if not public.is_owner() then
+    raise exception 'Only the owner can remove people.' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.allowed_emails where email = v_email and role = 'owner') then
+    raise exception 'The owner can''t be removed.' using errcode = '42501';
+  end if;
+  delete from public.allowed_emails where email = v_email;
+  delete from auth.users where lower(email) = v_email;
+end;
+$$;
+
+grant execute on function public.remove_team_member(text) to authenticated;
+
+-- Keep a removed person's calendar ideas (earlier the ideas were deleted with their profile).
+alter table public.post_ideas alter column created_by drop not null;
+alter table public.post_ideas drop constraint if exists post_ideas_created_by_fkey;
+alter table public.post_ideas
+  add constraint post_ideas_created_by_fkey foreign key (created_by) references public.profiles (id) on delete set null;

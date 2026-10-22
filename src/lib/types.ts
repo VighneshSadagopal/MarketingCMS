@@ -154,3 +154,14 @@ export type ContentComment = {
 
 /** Per-card counts shown on the board. */
 export type CommentCounts = { comments: number; openRequests: number };
+
+/** A row on the owner's team list: an allowed Google email and whether they've signed in yet. */
+export type TeamMember = {
+  email: string;
+  role: Role;
+  added_at: string;
+  joined: boolean;
+  user_id: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+};

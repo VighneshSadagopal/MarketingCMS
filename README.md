@@ -14,7 +14,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 - **Social media calendar**: month view of planned posts (by target publish date) and post ideas. Click a date to add an idea: every idea also creates a card in the Todo column, due that day. Deleting the idea removes its card.
 - **Campaigns**: group posts under a campaign with a goal, date range, colour and default hashtags and link. The Campaigns page shows progress for each one; a campaign's page shows its posts as a timeline, flags gaps of a week or more with nothing planned, and counts posts by status. Posts pick a campaign in the content form (its defaults fill in and the date is kept within the campaign), the board can filter by campaign, and the calendar marks a campaign's colour only on days when one of its posts or ideas is due.
 - **Content guidelines** (`/guidelines`, in the main nav): the DrupalAsia Connect social content guidelines, with an interactive pre-publish checklist and a UTM link builder. Copy lives in `src/lib/guidelines.ts`.
-- **Auth and avatars**: email + password or magic link. Avatars appear on board cards and in the header. The first account created becomes the owner; everyone after is a member.
+- **Google sign-in with a team allowlist**: people sign in with "Continue with Google". Only emails the owner adds under **Team access** (account menu → Team access) can sign in; a Supabase "Before user created" hook refuses everyone else, and removing someone deletes their login (their posts stay). Names and avatars come from Google. The owner is set in `supabase/schema.sql` (`vighneshp65@gmail.com`).
 
 ## Setup
 
@@ -41,10 +41,14 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 
    Open http://localhost:3000 and choose **Create an account**. The first account becomes the owner.
 
-## Supabase settings to review
+## Supabase settings for Google sign-in
 
-- **Authentication → URL configuration**: set Site URL and add redirect URLs for wherever you deploy (for example `https://your-domain/auth/callback`). Local development uses `http://localhost:3000`.
-- **Authentication → Sign in / Providers**: email confirmation is on by default, so new accounts must confirm their email before signing in. Once your team has joined, you can turn off "Allow new users to sign up" and invite people from the dashboard instead.
+1. **Google Cloud Console** → APIs & Services → Credentials → Create OAuth client ID (Web application).
+   Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`.
+2. **Supabase → Authentication → Sign In / Providers → Google**: turn it on and paste the client ID and secret.
+3. **Supabase → Authentication → Hooks → Before User Created**: choose Postgres and `public.hook_before_user_created`.
+4. **Supabase → Authentication → URL Configuration**: Site URL, plus redirect URLs for `http://localhost:3000/auth/callback` and your deployed `/auth/callback`.
+5. Optional: turn off the **Email** provider so nobody can create a password account.
 
 ## Project structure
 

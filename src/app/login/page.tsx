@@ -2,7 +2,20 @@ import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Sign in · DrupalAsia Marketing CMS" };
 
-export default function LoginPage() {
+const ERRORS: Record<string, string> = {
+  not_allowed: "This Google account isn't on the team list. Ask the owner to add it, then try again.",
+  removed: "Your access was removed by the owner.",
+  failed: "Google sign-in didn't complete. Please try again.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  // Only known codes are shown, never text passed in the URL.
+  const errorText = error ? (ERRORS[error] ?? ERRORS.failed) : undefined;
   return (
     <div className="flex min-h-screen flex-wrap">
       <section className="night relative flex min-h-[420px] flex-[1_1_520px] flex-col justify-between gap-12 overflow-hidden bg-navy-900 p-8 text-white sm:p-16">
@@ -48,7 +61,7 @@ export default function LoginPage() {
         </span>
       </section>
       <section className="flex flex-[1_1_480px] items-center justify-center px-4 py-16">
-        <LoginForm />
+        <LoginForm error={errorText} />
       </section>
     </div>
   );

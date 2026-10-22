@@ -4,7 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Campaign, CommentCounts, Content, ContentComment, PostIdea, Profile } from "@/lib/types";
+import type { Campaign, CommentCounts, Content, ContentComment, PostIdea, Profile, TeamMember } from "@/lib/types";
 
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
@@ -13,6 +13,10 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Removed from the team list since signing in: end the session.
+  const { data: allowed } = await supabase.rpc("am_i_allowed");
+  if (!allowed) redirect("/auth/signout?error=removed");
 
   const { data } = await supabase
     .from("profiles")
@@ -129,4 +133,12 @@ export async function getCommentCounts(): Promise<Record<string, CommentCounts>>
     if (r.kind === "change_request" && !r.resolved) c.openRequests += 1;
   }
   return counts;
+}
+
+/** Everyone on the allowlist, for the owner's Team access page. */
+export async function getTeamMembers(): Promise<TeamMember[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("team_members");
+  if (error) throw new Error(error.message);
+  return (data as TeamMember[]) ?? [];
 }
