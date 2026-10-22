@@ -28,8 +28,8 @@ export function platformLabel(id: string) {
   return PLATFORMS.find((p) => p.id === id)?.label ?? id;
 }
 
-/** X copy is limited to 200 characters. Links don't count towards it. */
-export const X_CHAR_LIMIT = 200;
+/** X copy is limited to 280 characters. Links don't count towards it. */
+export const X_CHAR_LIMIT = 280;
 
 const LINK_PATTERN = /(https?:\/\/|www\.)\S+/gi;
 
