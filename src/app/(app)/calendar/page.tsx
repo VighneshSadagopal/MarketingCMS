@@ -1,5 +1,5 @@
 import { CalendarView } from "@/components/calendar/calendar-view";
-import { getContentBetween, getCurrentProfile, getIdeasBetween } from "@/lib/data";
+import { getCampaigns, getContentBetween, getCurrentProfile, getIdeasBetween } from "@/lib/data";
 import { toIsoDate } from "@/lib/utils";
 
 export const metadata = { title: "Calendar · DrupalAsia Marketing CMS" };
@@ -31,7 +31,7 @@ export default async function CalendarPage({
   const gridStart = new Date(y, m, 1 - offset);
   const gridEnd = new Date(y, m, 1 - offset + totalCells); // exclusive
 
-  const [me, ideas, posts] = await Promise.all([
+  const [me, ideas, posts, campaigns] = await Promise.all([
     getCurrentProfile(),
     getIdeasBetween(toIsoDate(gridStart), toIsoDate(new Date(gridEnd.getTime() - 86400000))),
     // Pad by a day on each side so timezone edges are covered; the client buckets by local date.
@@ -39,6 +39,7 @@ export default async function CalendarPage({
       new Date(gridStart.getTime() - 86400000).toISOString(),
       new Date(gridEnd.getTime() + 86400000).toISOString()
     ),
+    getCampaigns(),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function CalendarPage({
       initialSelected={sp.date}
       ideas={ideas}
       posts={posts}
+      campaigns={campaigns}
       me={me}
     />
   );

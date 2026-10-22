@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 
+import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { SocialPreviews } from "@/components/content/social-previews";
 import { StatusActions } from "@/components/content/status-actions";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
-import { getContent, getCurrentProfile, getTeam } from "@/lib/data";
+import { getCampaigns, getContent, getCurrentProfile, getTeam } from "@/lib/data";
 import { publicImageUrl } from "@/lib/supabase/client";
 import { platformLabel, statusMeta, type Profile } from "@/lib/types";
 
@@ -42,7 +43,12 @@ function Person({ label, profile, suffix }: { label: string; profile?: Profile; 
 
 export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [me, team, item] = await Promise.all([getCurrentProfile(), getTeam(), getContent(id)]);
+  const [me, team, item, campaigns] = await Promise.all([
+    getCurrentProfile(),
+    getTeam(),
+    getContent(id),
+    getCampaigns(),
+  ]);
   if (!item) notFound();
 
   const byId = new Map(team.map((p) => [p.id, p]));
@@ -52,6 +58,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const meta = statusMeta(item.status);
   const imageUrls = item.images.map((p) => publicImageUrl("content-images", p));
   const isOwner = me.role === "owner";
+  const campaign = item.campaign_id ? campaigns.find((c) => c.id === item.campaign_id) : undefined;
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
@@ -80,6 +87,11 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               {meta.label}
             </Badge>
           </div>
+          {campaign ? (
+            <Link href={`/campaigns/${campaign.id}`} className="self-start no-underline" aria-label={`Campaign: ${campaign.name}`}>
+              <CampaignTag campaign={campaign} className="px-3 py-1 text-[13px] hover:border-input" />
+            </Link>
+          ) : null}
           {item.brief ? <p className="max-w-3xl text-sm text-muted-foreground">{item.brief}</p> : null}
         </div>
         <StatusActions

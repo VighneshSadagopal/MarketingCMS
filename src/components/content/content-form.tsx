@@ -18,6 +18,8 @@ import {
   MAX_IMAGES,
   PLATFORMS,
   X_WORD_LIMIT,
+  campaignDateRange,
+  type Campaign,
   type Content,
   type ContentStatus,
   type Platform,
@@ -41,11 +43,27 @@ function toLocalParts(iso: string | null) {
   };
 }
 
-export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profile; initial?: Content }) {
+export function ContentForm({
+  team,
+  me,
+  campaigns,
+  initial,
+  initialCampaignId,
+}: {
+  team: Profile[];
+  me: Profile;
+  campaigns: Campaign[];
+  initial?: Content;
+  initialCampaignId?: string;
+}) {
   const router = useRouter();
   const editing = !!initial;
   const initialWhen = toLocalParts(initial?.publish_at ?? null);
+  const startCampaign =
+    initial?.campaign_id ?? (campaigns.some((c) => c.id === initialCampaignId) ? initialCampaignId! : NONE);
+  const startCampaignRow = campaigns.find((c) => c.id === startCampaign);
 
+  const [campaignId, setCampaignId] = useState<string>(startCampaign);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [brief, setBrief] = useState(initial?.brief ?? "");
   const [startStatus, setStartStatus] = useState<ContentStatus>("todo");
@@ -55,8 +73,8 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
     x: initial?.copy_x ?? "",
     instagram: initial?.copy_instagram ?? "",
   });
-  const [hashtags, setHashtags] = useState(initial?.hashtags ?? "");
-  const [link, setLink] = useState(initial?.link_url ?? "");
+  const [hashtags, setHashtags] = useState(initial?.hashtags ?? startCampaignRow?.default_hashtags ?? "");
+  const [link, setLink] = useState(initial?.link_url ?? startCampaignRow?.default_link ?? "");
   const [images, setImages] = useState<ImageItem[]>(
     (initial?.images ?? []).map((path) => ({ kind: "stored", path, url: publicImageUrl("content-images", path) }))
   );
@@ -75,6 +93,17 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const campaign = campaigns.find((c) => c.id === campaignId);
+
+  function pickCampaign(id: string) {
+    setCampaignId(id);
+    const next = campaigns.find((c) => c.id === id);
+    if (!next) return;
+    // Fill in the campaign's defaults only where the post has nothing yet.
+    if (!hashtags.trim() && next.default_hashtags) setHashtags(next.default_hashtags);
+    if (!link.trim() && next.default_link) setLink(next.default_link);
+  }
 
   const xWords = countWords(copy.x);
   const xOver = xWords > X_WORD_LIMIT;
@@ -115,6 +144,11 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
       if (!copy[p.id].trim()) return toast.error(`Write the ${p.label} copy.`);
     }
     if (xOn && xOver) return toast.error(`X copy is over ${X_WORD_LIMIT} words.`);
+    if (campaign && date) {
+      if ((campaign.start_date && date < campaign.start_date) || (campaign.end_date && date > campaign.end_date)) {
+        return toast.error(`Pick a date within the campaign: ${campaignDateRange(campaign)}.`);
+      }
+    }
 
     setSaving(true);
     const supabase = createClient();
@@ -150,6 +184,7 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
         assignee_id: assignee === NONE ? null : assignee,
         reviewer_id: reviewer === NONE ? null : reviewer,
         publish_at: publishAt,
+        campaign_id: campaignId === NONE ? null : campaignId,
       };
 
       let id = initial?.id;
@@ -184,6 +219,28 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
         <Card>
           <fieldset className="flex flex-col gap-5">
             <legend className="mb-5 text-xl font-extrabold">Basics</legend>
+            <div className="flex flex-col gap-2">
+              <Label id="campaign-label">Campaign</Label>
+              <Select value={campaignId} onValueChange={pickCampaign}>
+                <SelectTrigger aria-labelledby="campaign-label" className="sm:w-96">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>No campaign</SelectItem>
+                  {campaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
+                        {c.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {campaign ? (
+                <span className="text-sm text-muted-foreground">{campaignDateRange(campaign)}</span>
+              ) : null}
+            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -388,7 +445,14 @@ export function ContentForm({ team, me, initial }: { team: Profile[]; me: Profil
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="date">Target publish date</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <Input
+                  id="date"
+                  type="date"
+                  min={campaign?.start_date ?? undefined}
+                  max={campaign?.end_date ?? undefined}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="time">Time</Label>

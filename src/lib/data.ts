@@ -4,7 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Content, PostIdea, Profile } from "@/lib/types";
+import type { Campaign, Content, PostIdea, Profile } from "@/lib/types";
 
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
@@ -74,4 +74,31 @@ export async function getIdeasBetween(fromDate: string, toDate: string): Promise
     .order("created_at");
   if (error) throw new Error(error.message);
   return (data as PostIdea[]) ?? [];
+}
+
+export const getCampaigns = cache(async (): Promise<Campaign[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("*")
+    .order("start_date", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return (data as Campaign[]) ?? [];
+});
+
+export async function getCampaign(id: string): Promise<Campaign | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("campaigns").select("*").eq("id", id).maybeSingle();
+  return (data as Campaign | null) ?? null;
+}
+
+export async function getCampaignContent(id: string): Promise<Content[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("content")
+    .select("*")
+    .eq("campaign_id", id)
+    .order("publish_at", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return (data as Content[]) ?? [];
 }

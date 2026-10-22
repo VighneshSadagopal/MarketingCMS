@@ -57,6 +57,7 @@ export type Content = {
   reviewer_id: string | null;
   publish_at: string | null;
   position: number;
+  campaign_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -70,4 +71,57 @@ export type PostIdea = {
   created_at: string;
   /** The Todo card created with this idea. */
   content_id: string | null;
+  campaign_id: string | null;
 };
+
+export const CAMPAIGN_STATUSES = [
+  { id: "planning", label: "Planning" },
+  { id: "active", label: "Active" },
+  { id: "finished", label: "Finished" },
+] as const;
+
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number]["id"];
+
+export function campaignStatusLabel(id: string) {
+  return CAMPAIGN_STATUSES.find((s) => s.id === id)?.label ?? id;
+}
+
+/** Campaign colours. Used as markers (dots, bars), never behind text. */
+export const CAMPAIGN_COLORS = [
+  { value: "#0462d2", label: "Blue" },
+  { value: "#f86802", label: "Orange" },
+  { value: "#38d9f5", label: "Cyan" },
+  { value: "#0342a5", label: "Deep blue" },
+  { value: "#1a8a5a", label: "Green" },
+  { value: "#7a4fd8", label: "Purple" },
+  { value: "#d6336c", label: "Pink" },
+  { value: "#031a4b", label: "Navy" },
+] as const;
+
+export type Campaign = {
+  id: string;
+  name: string;
+  brief: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  color: string;
+  default_hashtags: string | null;
+  default_link: string | null;
+  status: CampaignStatus;
+  created_by: string | null;
+  created_at: string;
+};
+
+const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** "1 Nov 2026 - 30 Jan 2027", or a fallback when dates are missing. */
+export function campaignDateRange(c: Pick<Campaign, "start_date" | "end_date">) {
+  const f = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    return shortDate.format(new Date(y, m - 1, day));
+  };
+  if (c.start_date && c.end_date) return `${f(c.start_date)} - ${f(c.end_date)}`;
+  if (c.start_date) return `From ${f(c.start_date)}`;
+  if (c.end_date) return `Until ${f(c.end_date)}`;
+  return "No dates set";
+}

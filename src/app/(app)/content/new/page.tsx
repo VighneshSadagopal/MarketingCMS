@@ -1,12 +1,17 @@
 import Link from "next/link";
 
 import { ContentForm } from "@/components/content/content-form";
-import { getCurrentProfile, getTeam } from "@/lib/data";
+import { getCampaigns, getCurrentProfile, getTeam } from "@/lib/data";
 
 export const metadata = { title: "New content · DrupalAsia Marketing CMS" };
 
-export default async function NewContentPage() {
-  const [me, team] = await Promise.all([getCurrentProfile(), getTeam()]);
+export default async function NewContentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ campaign?: string }>;
+}) {
+  const { campaign } = await searchParams;
+  const [me, team, campaigns] = await Promise.all([getCurrentProfile(), getTeam(), getCampaigns()]);
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm font-semibold">
@@ -26,7 +31,7 @@ export default async function NewContentPage() {
           Write the copy for each platform and add up to 4 images.
         </p>
       </div>
-      <ContentForm team={team} me={me} />
+      <ContentForm team={team} me={me} campaigns={campaigns} initialCampaignId={campaign} />
     </div>
   );
 }

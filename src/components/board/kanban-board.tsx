@@ -25,6 +25,7 @@ import {
   OWNER_ONLY_STATUSES,
   PLATFORMS,
   STATUSES,
+  type Campaign,
   type Content,
   type ContentStatus,
   type Profile,
@@ -35,16 +36,19 @@ export function KanbanBoard({
   initialItems,
   team,
   me,
+  campaigns,
 }: {
   initialItems: Content[];
   team: Profile[];
   me: Profile;
+  campaigns: Campaign[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [syncedFrom, setSyncedFrom] = useState(initialItems);
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("all");
   const [member, setMember] = useState<string | null>(null);
+  const [campaignFilter, setCampaignFilter] = useState("all");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -55,6 +59,7 @@ export function KanbanBoard({
   }
 
   const teamById = useMemo(() => new Map(team.map((p) => [p.id, p])), [team]);
+  const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -64,6 +69,8 @@ export function KanbanBoard({
   const visible = items.filter((c) => {
     if (query && !c.title.toLowerCase().includes(query.toLowerCase())) return false;
     if (platform !== "all" && !c.platforms.includes(platform as Content["platforms"][number])) return false;
+    if (campaignFilter === "none" && c.campaign_id) return false;
+    if (campaignFilter !== "all" && campaignFilter !== "none" && c.campaign_id !== campaignFilter) return false;
     if (member && c.author_id !== member && c.assignee_id !== member && c.reviewer_id !== member) return false;
     return true;
   });
@@ -132,6 +139,28 @@ export function KanbanBoard({
             </SelectContent>
           </Select>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold" id="campaign-filter">
+            Campaign
+          </span>
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+            <SelectTrigger className="w-56" aria-labelledby="campaign-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All campaigns</SelectItem>
+              <SelectItem value="none">No campaign</SelectItem>
+              {campaigns.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
+                    {c.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div role="group" aria-label="Filter by team member" className="flex items-center pl-2">
           {team.map((p) => (
             <button
@@ -163,13 +192,21 @@ export function KanbanBoard({
                 locked={!isOwner && OWNER_ONLY_STATUSES.includes(s.id)}
                 items={visible.filter((c) => c.status === s.id).sort((a, b) => a.position - b.position)}
                 teamById={teamById}
+                campaignById={campaignById}
                 activeId={activeId}
               />
             ))}
           </div>
         </div>
         <DragOverlay>
-          {active ? <ContentCard item={active} teamById={teamById} overlay /> : null}
+          {active ? (
+            <ContentCard
+              item={active}
+              teamById={teamById}
+              campaign={active.campaign_id ? campaignById.get(active.campaign_id) : undefined}
+              overlay
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
     </div>
@@ -183,6 +220,7 @@ function Column({
   locked,
   items,
   teamById,
+  campaignById,
   activeId,
 }: {
   status: ContentStatus;
@@ -191,6 +229,7 @@ function Column({
   locked: boolean;
   items: Content[];
   teamById: Map<string, Profile>;
+  campaignById: Map<string, Campaign>;
   activeId: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status, disabled: locked });
@@ -228,7 +267,13 @@ function Column({
       </div>
       {locked ? <p className="px-1 text-xs font-semibold text-muted-foreground">Owner moves cards here</p> : null}
       {items.map((c) => (
-        <ContentCard key={c.id} item={c} teamById={teamById} dimmed={activeId === c.id} />
+        <ContentCard
+          key={c.id}
+          item={c}
+          teamById={teamById}
+          campaign={c.campaign_id ? campaignById.get(c.campaign_id) : undefined}
+          dimmed={activeId === c.id}
+        />
       ))}
     </section>
   );

@@ -1,10 +1,15 @@
 import { KanbanBoard } from "@/components/board/kanban-board";
-import { getAllContent, getCurrentProfile, getTeam } from "@/lib/data";
+import { getAllContent, getCampaigns, getCurrentProfile, getTeam } from "@/lib/data";
 
 export const metadata = { title: "Content board · DrupalAsia Marketing CMS" };
 
 export default async function BoardPage() {
-  const [profile, team, content] = await Promise.all([getCurrentProfile(), getTeam(), getAllContent()]);
+  const [profile, team, content, campaigns] = await Promise.all([
+    getCurrentProfile(),
+    getTeam(),
+    getAllContent(),
+    getCampaigns(),
+  ]);
 
   return (
     <>
@@ -14,7 +19,7 @@ export default async function BoardPage() {
         </span>
         <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">Content board</h1>
       </div>
-      <KanbanBoard initialItems={content} team={team} me={profile} />
+      <KanbanBoard initialItems={content} team={team} me={profile} campaigns={campaigns} />
     </>
   );
 }

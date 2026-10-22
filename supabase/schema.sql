@@ -286,3 +286,98 @@ begin
     update public.post_ideas set content_id = v_id where id = r.id;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Campaigns: a group of posts with a goal, a date range and shared defaults.
+-- ---------------------------------------------------------------------------
+create table if not exists public.campaigns (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 120),
+  brief text,
+  start_date date,
+  end_date date,
+  color text not null default '#0462d2' check (color ~ '^#[0-9a-fA-F]{6}$'),
+  default_hashtags text,
+  default_link text,
+  status text not null default 'planning' check (status in ('planning', 'active', 'finished')),
+  created_by uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint campaigns_dates check (end_date is null or start_date is null or end_date >= start_date)
+);
+
+alter table public.content
+  add column if not exists campaign_id uuid references public.campaigns (id) on delete set null;
+create index if not exists content_campaign_idx on public.content (campaign_id);
+
+alter table public.post_ideas
+  add column if not exists campaign_id uuid references public.campaigns (id) on delete set null;
+
+alter table public.campaigns enable row level security;
+
+drop policy if exists "campaigns readable by team" on public.campaigns;
+create policy "campaigns readable by team" on public.campaigns
+  for select to authenticated using (true);
+
+drop policy if exists "team creates campaigns" on public.campaigns;
+create policy "team creates campaigns" on public.campaigns
+  for insert to authenticated with check (created_by = auth.uid());
+
+drop policy if exists "team updates campaigns" on public.campaigns;
+create policy "team updates campaigns" on public.campaigns
+  for update to authenticated using (true) with check (true);
+
+drop policy if exists "creator or owner deletes campaigns" on public.campaigns;
+create policy "creator or owner deletes campaigns" on public.campaigns
+  for delete to authenticated using (created_by = auth.uid() or public.is_owner());
+
+-- Ideas can belong to a campaign; their Todo card joins the same campaign.
+drop function if exists public.create_post_idea(date, text, text[]);
+
+create or replace function public.create_post_idea(
+  p_idea_date date,
+  p_text text,
+  p_platforms text[],
+  p_campaign_id uuid default null
+)
+returns public.post_ideas
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_content_id uuid;
+  v_idea public.post_ideas;
+  v_text text := btrim(p_text);
+  v_tags text;
+  v_link text;
+begin
+  if p_campaign_id is not null then
+    select default_hashtags, default_link into v_tags, v_link
+    from public.campaigns where id = p_campaign_id;
+  end if;
+
+  insert into public.content (title, brief, status, platforms, author_id, assignee_id, publish_at,
+                              campaign_id, hashtags, link_url)
+  values (
+    left(v_text, 200),
+    case when char_length(v_text) > 200 then v_text end,
+    'todo',
+    coalesce(p_platforms, '{}'),
+    auth.uid(),
+    auth.uid(),
+    (p_idea_date + time '10:00') at time zone 'Asia/Kolkata',
+    p_campaign_id,
+    v_tags,
+    v_link
+  )
+  returning id into v_content_id;
+
+  insert into public.post_ideas (idea_date, text, platforms, created_by, content_id, campaign_id)
+  values (p_idea_date, v_text, coalesce(p_platforms, '{}'), auth.uid(), v_content_id, p_campaign_id)
+  returning * into v_idea;
+
+  return v_idea;
+end;
+$$;
+
+grant execute on function public.create_post_idea(date, text, text[], uuid) to authenticated;
