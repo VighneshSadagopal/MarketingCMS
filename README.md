@@ -13,6 +13,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 - **Review and comments**: each post has a Review and activity feed with comments, change requests and its status history. "Suggest changes" asks for a note, saves it as a change request and moves the card to Changes suggested (dropping a card on that column opens the note box). Change requests can be marked resolved, and board cards show open change requests and comment counts.
 - **Social media calendar**: month view of planned posts (by target publish date) and post ideas. Click a date to add an idea: every idea also creates a card in the Todo column, due that day. Deleting the idea removes its card.
 - **Campaigns**: group posts under a campaign with a goal, date range, colour and default hashtags and link. The Campaigns page shows progress for each one; a campaign's page shows its posts as a timeline, flags gaps of a week or more with nothing planned, and counts posts by status. Posts pick a campaign in the content form (its defaults fill in and the date is kept within the campaign), the board can filter by campaign, and the calendar marks a campaign's colour only on days when one of its posts or ideas is due.
+- **Content guidelines** (`/guidelines`, in the main nav): the DrupalAsia Connect social content guidelines, with an interactive pre-publish checklist and a UTM link builder. Copy lives in `src/lib/guidelines.ts`.
 - **Auth and avatars**: email + password or magic link. Avatars appear on board cards and in the header. The first account created becomes the owner; everyone after is a member.
 
 ## Setup
@@ -50,7 +51,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 ```
 src/
   app/
-    (app)/            signed-in pages: board, calendar, campaigns, content, profile
+    (app)/            signed-in pages: board, calendar, campaigns, content, guidelines, profile
     auth/callback/    magic link and email confirmation handler
     login/            sign in / create account
   components/

@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/", label: "Board" },
   { href: "/calendar", label: "Calendar" },
   { href: "/campaigns", label: "Campaigns" },
-  { href: "/content/new", label: "New content" },
+  { href: "/guidelines", label: "Content guidelines" },
 ];
 
 export function MainNav() {

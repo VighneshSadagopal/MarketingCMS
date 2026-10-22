@@ -20,10 +20,11 @@ export function AppHeader({ profile }: { profile: Profile }) {
         <MainNav />
       </div>
       <div className="flex items-center gap-4">
-        <Button asChild className="hidden sm:inline-flex">
-          <Link href="/content/new">
+        {/* The only way to add content from the header, so it stays visible on phones (icon only there). */}
+        <Button asChild className="max-sm:size-11 max-sm:px-0">
+          <Link href="/content/new" aria-label="New content">
             <Plus strokeWidth={2.5} />
-            New content
+            <span className="max-sm:sr-only">New content</span>
           </Link>
         </Button>
         <UserMenu profile={profile} />
