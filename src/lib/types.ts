@@ -68,4 +68,6 @@ export type PostIdea = {
   platforms: Platform[];
   created_by: string;
   created_at: string;
+  /** The Todo card created with this idea. */
+  content_id: string | null;
 };

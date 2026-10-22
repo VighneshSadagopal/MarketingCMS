@@ -230,3 +230,59 @@ drop policy if exists "users delete own avatar" on storage.objects;
 create policy "users delete own avatar" on storage.objects
   for delete to authenticated
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------------------
+-- Every post idea also creates a Todo card on the board.
+-- ---------------------------------------------------------------------------
+alter table public.post_ideas
+  add column if not exists content_id uuid references public.content (id) on delete cascade;
+
+create index if not exists post_ideas_content_idx on public.post_ideas (content_id);
+
+-- Creates the idea and its Todo card in one transaction (runs with the caller's permissions).
+create or replace function public.create_post_idea(p_idea_date date, p_text text, p_platforms text[])
+returns public.post_ideas
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_content_id uuid;
+  v_idea public.post_ideas;
+  v_text text := btrim(p_text);
+begin
+  insert into public.content (title, brief, status, platforms, author_id, assignee_id, publish_at)
+  values (
+    left(v_text, 200),
+    case when char_length(v_text) > 200 then v_text end,
+    'todo',
+    coalesce(p_platforms, '{}'),
+    auth.uid(),
+    auth.uid(),
+    (p_idea_date + time '10:00') at time zone 'Asia/Kolkata'
+  )
+  returning id into v_content_id;
+
+  insert into public.post_ideas (idea_date, text, platforms, created_by, content_id)
+  values (p_idea_date, v_text, coalesce(p_platforms, '{}'), auth.uid(), v_content_id)
+  returning * into v_idea;
+
+  return v_idea;
+end;
+$$;
+
+grant execute on function public.create_post_idea(date, text, text[]) to authenticated;
+
+-- Give any earlier ideas a Todo card too.
+do $$
+declare r record; v_id uuid;
+begin
+  for r in select * from public.post_ideas where content_id is null loop
+    insert into public.content (title, brief, status, platforms, author_id, assignee_id, publish_at)
+    values (left(r.text, 200), case when char_length(r.text) > 200 then r.text end, 'todo',
+            r.platforms, r.created_by, r.created_by,
+            (r.idea_date + time '10:00') at time zone 'Asia/Kolkata')
+    returning id into v_id;
+    update public.post_ideas set content_id = v_id where id = r.id;
+  end loop;
+end $$;

@@ -66,15 +66,21 @@ export function CalendarView({
     return map;
   }, [ideas]);
 
+  const postsById = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts]);
+
   const postsByDate = useMemo(() => {
+    // A card created from an idea shows as that idea, not twice.
+    // If the card was rescheduled to another date, it shows there as a planned post.
+    const ideaDateByContent = new Map(ideas.filter((i) => i.content_id).map((i) => [i.content_id, i.idea_date]));
     const map = new Map<string, Content[]>();
     for (const p of posts) {
       if (!p.publish_at) continue;
       const key = toIsoDate(new Date(p.publish_at));
+      if (ideaDateByContent.get(p.id) === key) continue;
       map.set(key, [...(map.get(key) ?? []), p]);
     }
     return map;
-  }, [posts]);
+  }, [posts, ideas]);
 
   const cells = useMemo(() => {
     const first = new Date(year, month, 1);
@@ -103,22 +109,29 @@ export function CalendarView({
     const text = draft.trim();
     if (!text) return;
     startTransition(async () => {
-      const { error } = await createClient()
-        .from("post_ideas")
-        .insert({ idea_date: selected, text, platforms: draftPlatforms, created_by: me.id });
+      // Creates the idea and its Todo card on the board together.
+      const { error } = await createClient().rpc("create_post_idea", {
+        p_idea_date: selected,
+        p_text: text,
+        p_platforms: draftPlatforms,
+      });
       if (error) {
         toast.error(error.message);
         return;
       }
       setDraft("");
-      toast.success("Idea added.");
+      toast.success("Idea added to Todo on the board.");
       router.refresh();
     });
   }
 
-  function removeIdea(id: string) {
+  function removeIdea(idea: PostIdea) {
     startTransition(async () => {
-      const { error } = await createClient().from("post_ideas").delete().eq("id", id);
+      const supabase = createClient();
+      // Deleting the card removes the idea with it (on delete cascade).
+      const { error } = idea.content_id
+        ? await supabase.from("content").delete().eq("id", idea.content_id)
+        : await supabase.from("post_ideas").delete().eq("id", idea.id);
       if (error) toast.error(error.message);
       else router.refresh();
     });
@@ -269,7 +282,7 @@ export function CalendarView({
                   {i.created_by === me.id || me.role === "owner" ? (
                     <button
                       type="button"
-                      onClick={() => removeIdea(i.id)}
+                      onClick={() => removeIdea(i)}
                       disabled={pending}
                       aria-label={`Delete idea: ${i.text}`}
                       className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-ice-100"
@@ -282,9 +295,11 @@ export function CalendarView({
                   <span className="text-[13px] font-semibold text-muted-foreground">
                     {i.platforms.length ? i.platforms.map(platformLabel).join(", ") : "No platform yet"}
                   </span>
-                  <Link href="/content/new" className="text-[13px] font-bold text-blue-600">
-                    Turn into content
-                  </Link>
+                  {i.content_id ? (
+                    <Link href={`/content/${i.content_id}`} className="text-[13px] font-bold text-blue-600">
+                      {statusMeta(postsById.get(i.content_id)?.status ?? "todo").label} · Open card
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             ))}

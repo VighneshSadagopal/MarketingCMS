@@ -9,7 +9,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 - **Kanban board** with six columns: Todo, Changes suggested, In progress, Ready for review, Ready for schedule, Done / Posted. Drag cards between columns. Only the owner can move cards into Ready for schedule or Done / Posted (enforced in the UI, the server action and a database trigger).
 - **Content detail** with LinkedIn, X and Instagram post previews using the uploaded images (Instagram shows them as a carousel).
 - **Content form**: copy per platform, hashtags, link, up to 4 images shared by all platforms, assignee, reviewer, target publish date and time. X copy is limited to 200 words (checked in the form and by a database constraint).
-- **Social media calendar**: month view of planned posts (by target publish date) and post ideas. Click a date to add or delete ideas for it.
+- **Social media calendar**: month view of planned posts (by target publish date) and post ideas. Click a date to add an idea: every idea also creates a card in the Todo column, due that day. Deleting the idea removes its card.
 - **Auth and avatars**: email + password or magic link. Avatars appear on board cards and in the header. The first account created becomes the owner; everyone after is a member.
 
 ## Setup
