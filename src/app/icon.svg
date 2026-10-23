@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- DrupalAsia Marketing CMS: navy ground, the orange bar from the header logo, and a cyan node network -->
+  <rect width="64" height="64" rx="14" fill="#03163b"/>
+  <rect x="11" y="13" width="8" height="38" rx="4" fill="#f86802"/>
+  <path d="M30 44 L40 20 L53 36" fill="none" stroke="#38d9f5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="30" cy="44" r="6.5" fill="#38d9f5"/>
+  <circle cx="40" cy="20" r="6.5" fill="#ffffff"/>
+  <circle cx="53" cy="36" r="6.5" fill="#38d9f5"/>
+</svg>
