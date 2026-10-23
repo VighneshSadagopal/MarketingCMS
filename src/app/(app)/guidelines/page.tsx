@@ -1,4 +1,4 @@
-import { Check, X as XIcon } from "lucide-react";
+import { Check, FileDown, X as XIcon } from "lucide-react";
 
 import { PrePublishChecklist } from "@/components/guidelines/checklist";
 import { UtmBuilder } from "@/components/guidelines/utm-builder";
@@ -25,6 +25,9 @@ import {
 } from "@/lib/guidelines";
 
 export const metadata = { title: "Content guidelines · DrupalAsia Marketing CMS" };
+
+// Generated from src/lib/guidelines.ts by `npm run guidelines:docx`.
+const DOCX_URL = "/downloads/drupalasia-connect-2027-social-content-guidelines.docx";
 
 function Section({
   id,
@@ -99,6 +102,20 @@ export default function GuidelinesPage() {
             Drawn from the Outreach &amp; Attention Plan discussion draft (19 October 2026). Working guidance for
             Marketing, Program, Website, Registration and Partnerships until the campaign is approved.
           </p>
+          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-white/25 bg-white/5 p-4">
+            <a
+              href={DOCX_URL}
+              download="DrupalAsia Connect 2027 - Social Content Guidelines.docx"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-white px-5 font-bold text-navy-800 no-underline hover:bg-ice-100"
+            >
+              <FileDown className="size-5 text-blue-600" strokeWidth={2.5} aria-hidden />
+              Download as Word
+            </a>
+            <p className="max-w-md text-sm text-ice-100/80">
+              The full guidelines in one document (.docx, 9 pages). Give it to an AI assistant as context when
+              drafting posts; it includes how to ask and the CMS posting rules.
+            </p>
+          </div>
         </div>
       </header>
 
