@@ -628,3 +628,65 @@ alter table public.post_ideas alter column created_by drop not null;
 alter table public.post_ideas drop constraint if exists post_ideas_created_by_fkey;
 alter table public.post_ideas
   add constraint post_ideas_created_by_fkey foreign key (created_by) references public.profiles (id) on delete set null;
+
+-- ---------------------------------------------------------------------------
+-- Calendar: ideas can move to another date, and deleting an idea keeps its card.
+-- ---------------------------------------------------------------------------
+drop policy if exists "team updates ideas" on public.post_ideas;
+create policy "team updates ideas" on public.post_ideas
+  for update to authenticated using (true) with check (true);
+
+-- The idea no longer owns its card: deleting the idea leaves the card on the board.
+alter table public.post_ideas drop constraint if exists post_ideas_content_id_fkey;
+alter table public.post_ideas
+  add constraint post_ideas_content_id_fkey foreign key (content_id) references public.content (id) on delete set null;
+
+-- Move an idea to another day; its card's target date moves too, keeping the time of day (IST).
+create or replace function public.move_post_idea(p_idea_id uuid, p_new_date date)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_content_id uuid;
+begin
+  update public.post_ideas set idea_date = p_new_date where id = p_idea_id
+  returning content_id into v_content_id;
+  if not found then
+    raise exception 'Idea not found.' using errcode = 'P0002';
+  end if;
+
+  if v_content_id is not null then
+    update public.content
+    set publish_at = (p_new_date + coalesce((publish_at at time zone 'Asia/Kolkata')::time, time '10:00'))
+                     at time zone 'Asia/Kolkata'
+    where id = v_content_id;
+  end if;
+end;
+$$;
+
+grant execute on function public.move_post_idea(uuid, date) to authenticated;
+
+-- When a card's target date changes (edit form, calendar), its idea follows to the same day.
+create or replace function public.content_sync_idea_date()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.publish_at is not null and new.publish_at is distinct from old.publish_at then
+    update public.post_ideas
+    set idea_date = (new.publish_at at time zone 'Asia/Kolkata')::date
+    where content_id = new.id
+      and idea_date is distinct from (new.publish_at at time zone 'Asia/Kolkata')::date;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists content_sync_idea_date on public.content;
+create trigger content_sync_idea_date
+  after update of publish_at on public.content
+  for each row execute function public.content_sync_idea_date();
