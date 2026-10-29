@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Inbox, Plus } from "lucide-react";
+import { CheckCircle2, Inbox, Palette, Plus } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { DeadlineLabel } from "@/components/content/deadline-label";
@@ -11,31 +11,55 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getDeadline } from "@/lib/deadlines";
-import { statusMeta, type Campaign, type Content, type ContentStatus, type Profile } from "@/lib/types";
+import {
+  canCreateContent,
+  roleLabel,
+  statusMeta,
+  type Campaign,
+  type Content,
+  type ContentStatus,
+  type Profile,
+} from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
 
 const STAGES: { label: string; statuses: ContentStatus[]; color: string }[] = [
   { label: "To do", statuses: ["todo"], color: "#7f8aa3" },
-  { label: "In progress", statuses: ["in_progress", "changes_suggested", "ready_for_review"], color: "#0462d2" },
-  { label: "Ready to post", statuses: ["ready_for_schedule"], color: "#38d9f5" },
+  {
+    label: "In progress",
+    statuses: ["in_progress", "changes_suggested", "ready_for_review"],
+    color: "#0462d2",
+  },
+  {
+    label: "Ready to post",
+    statuses: ["ready_for_schedule"],
+    color: "#38d9f5",
+  },
   { label: "Completed", statuses: ["done"], color: "#031a4b" },
 ];
 
-const when = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const when = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 function Tile({ label, value, tone }: { label: string; value: number | string; tone?: "bad" }) {
   return (
     <div className="flex flex-col gap-1 rounded-2xl border border-border bg-white p-5">
       <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-      <span className={cn("text-4xl font-extrabold tabular-nums", tone === "bad" ? "text-destructive" : "text-navy-800")}>
+      <span
+        className={cn("text-4xl font-extrabold tabular-nums", tone === "bad" ? "text-destructive" : "text-navy-800")}
+      >
         {value}
       </span>
     </div>
   );
 }
 
-function TaskRow({ item, campaign }: { item: Content; campaign?: Campaign }) {
+function TaskRow({ item, campaign, note }: { item: Content; campaign?: Campaign; note?: string | null }) {
   const meta = statusMeta(item.status);
   return (
     <li>
@@ -49,7 +73,10 @@ function TaskRow({ item, campaign }: { item: Content; campaign?: Campaign }) {
             <span
               aria-hidden
               className="size-2 rounded-full"
-              style={{ background: meta.dot, boxShadow: "inset 0 0 0 1px rgba(3,26,75,0.35)" }}
+              style={{
+                background: meta.dot,
+                boxShadow: "inset 0 0 0 1px rgba(3,26,75,0.35)",
+              }}
             />
             {meta.label}
           </Badge>
@@ -58,6 +85,12 @@ function TaskRow({ item, campaign }: { item: Content; campaign?: Campaign }) {
           <span>{item.publish_at ? `Target ${when.format(new Date(item.publish_at))}` : "No target date"}</span>
           {campaign ? <CampaignTag campaign={campaign} /> : null}
         </div>
+        {note ? (
+          <p className="rounded-md border-l-4 border-cyan-300 bg-ice-100 px-3 py-2 text-sm">
+            <span className="font-bold">Graphic brief: </span>
+            {note}
+          </p>
+        ) : null}
         <DeadlineLabel item={item} className="self-start" />
       </Link>
     </li>
@@ -70,6 +103,7 @@ export function MyWork({
   team,
   assigned,
   toReview,
+  graphics,
   campaigns,
 }: {
   me: Profile;
@@ -78,6 +112,8 @@ export function MyWork({
   team: Profile[];
   assigned: Content[];
   toReview: Content[];
+  /** Posts this person was asked to make a graphic for. */
+  graphics: Content[];
   campaigns: Campaign[];
 }) {
   const router = useRouter();
@@ -90,7 +126,10 @@ export function MyWork({
   const completed = assigned.filter((c) => c.status === "done");
   const overdue = now === null ? null : open.filter((c) => getDeadline(c, now)?.tone === "overdue");
   const pct = assigned.length ? Math.round((completed.length / assigned.length) * 100) : 0;
-  const stageCounts = STAGES.map((s) => ({ ...s, n: assigned.filter((c) => s.statuses.includes(c.status)).length }));
+  const stageCounts = STAGES.map((s) => ({
+    ...s,
+    n: assigned.filter((c) => s.statuses.includes(c.status)).length,
+  }));
   const maxStage = Math.max(1, ...stageCounts.map((s) => s.n));
 
   // Open work first by urgency: overdue, then due soon, then by target date.
@@ -99,12 +138,17 @@ export function MyWork({
     return d?.tone === "overdue" ? 0 : d ? 1 : 2;
   };
   const upNext = [...open].sort(
-    (a, b) => rank(a) - rank(b) || (a.publish_at ?? "9").localeCompare(b.publish_at ?? "9")
+    (a, b) => rank(a) - rank(b) || (a.publish_at ?? "9").localeCompare(b.publish_at ?? "9"),
   );
+  const graphicsOpen = graphics.filter((c) => c.graphic_status === "requested");
+  const graphicsDone = graphics.filter((c) => c.graphic_status === "delivered");
   const doneRecent = [...completed].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   let takeaway = `${open.length} open ${open.length === 1 ? "post" : "posts"} and ${completed.length} completed.`;
-  if (overdue && overdue.length) takeaway += ` ${overdue.length} ${overdue.length === 1 ? "is" : "are"} past a deadline: start there.`;
+  if (graphicsOpen.length)
+    takeaway += ` ${graphicsOpen.length} ${graphicsOpen.length === 1 ? "graphic is" : "graphics are"} waiting for ${isSelf ? "you" : "them"}.`;
+  if (overdue && overdue.length)
+    takeaway += ` ${overdue.length} ${overdue.length === 1 ? "is" : "are"} past a deadline: start there.`;
   else if (overdue && open.length) takeaway += " Nothing is overdue.";
 
   return (
@@ -114,7 +158,7 @@ export function MyWork({
           <UserAvatar profile={viewing} className="size-14 text-lg" />
           <div className="flex flex-col gap-1">
             <span className="font-label text-[13px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-              {isSelf ? "My work" : "Team member"}
+              {isSelf ? "My work" : "Team member"} · {roleLabel(viewing)}
             </span>
             <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">
               {isSelf ? `Hi ${firstName}` : (viewing.full_name ?? "Team member")}
@@ -128,10 +172,7 @@ export function MyWork({
               <span id="person-label" className="text-sm font-bold">
                 Show
               </span>
-              <Select
-                value={viewing.id}
-                onValueChange={(id) => router.push(id === me.id ? "/" : `/?person=${id}`)}
-              >
+              <Select value={viewing.id} onValueChange={(id) => router.push(id === me.id ? "/" : `/?person=${id}`)}>
                 <SelectTrigger className="w-56" aria-labelledby="person-label">
                   <SelectValue />
                 </SelectTrigger>
@@ -163,10 +204,34 @@ export function MyWork({
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
-        <section
-          aria-labelledby="next-h"
-          className="flex min-w-0 flex-[999_1_560px] flex-col gap-4"
-        >
+        <section aria-labelledby="next-h" className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
+          {graphics.length ? (
+            <div className="flex flex-col gap-3 pb-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-extrabold">
+                  <Palette className="size-5 text-blue-600" strokeWidth={2.5} aria-hidden />
+                  Graphics requested
+                </h2>
+                <span className="text-sm text-muted-foreground">
+                  {graphicsOpen.length} to make · {graphicsDone.length} delivered
+                </span>
+              </div>
+              {graphicsOpen.length === 0 ? (
+                <p className="text-sm text-muted-foreground">All requested graphics are delivered.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {graphicsOpen.map((c) => (
+                    <TaskRow
+                      key={c.id}
+                      item={c}
+                      campaign={c.campaign_id ? campaignById.get(c.campaign_id) : undefined}
+                      note={c.graphic_note}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-2">
             <h2 id="next-h" className="text-xl font-extrabold">
               Up next
@@ -181,7 +246,7 @@ export function MyWork({
               <p className="text-sm text-muted-foreground">
                 {isSelf ? "No posts are assigned to you right now." : "No open posts are assigned to them."}
               </p>
-              {isSelf ? (
+              {isSelf && canCreateContent(me) ? (
                 <Button asChild size="sm">
                   <Link href="/content/new">
                     <Plus strokeWidth={2.5} /> New content
@@ -210,7 +275,10 @@ export function MyWork({
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          <section aria-labelledby="progress-h" className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-6">
+          <section
+            aria-labelledby="progress-h"
+            className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-6"
+          >
             <h2 id="progress-h" className="text-xl font-extrabold">
               Progress
             </h2>
@@ -221,11 +289,7 @@ export function MyWork({
                   {completed.length} of {assigned.length} completed
                 </span>
               </div>
-              <div
-                role="img"
-                aria-label={`${pct}% completed`}
-                className="h-3 overflow-hidden rounded-full bg-ice-100"
-              >
+              <div role="img" aria-label={`${pct}% completed`} className="h-3 overflow-hidden rounded-full bg-ice-100">
                 <div className="h-full rounded-full bg-blue-600" style={{ width: `${pct}%` }} />
               </div>
             </div>
@@ -236,7 +300,10 @@ export function MyWork({
                   <div aria-hidden className="h-3 rounded-sm bg-ice-100">
                     <div
                       className="h-full rounded-sm"
-                      style={{ width: `${(s.n / maxStage) * 100}%`, background: s.color }}
+                      style={{
+                        width: `${(s.n / maxStage) * 100}%`,
+                        background: s.color,
+                      }}
                     />
                   </div>
                   <dd className="text-right font-bold tabular-nums">{s.n}</dd>
@@ -245,7 +312,10 @@ export function MyWork({
             </dl>
           </section>
 
-          <section aria-labelledby="done-h" className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-6">
+          <section
+            aria-labelledby="done-h"
+            className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-6"
+          >
             <h2 id="done-h" className="text-xl font-extrabold">
               Completed
             </h2>

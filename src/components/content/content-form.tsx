@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ImagePlus, X as XIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ImagePlus, Palette, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,16 +21,16 @@ import {
   X_CHAR_LIMIT,
   xCharCount,
   campaignDateRange,
+  isDesigner,
   type Campaign,
+  type GraphicStatus,
   type Content,
   type ContentStatus,
   type Platform,
   type Profile,
 } from "@/lib/types";
 
-type ImageItem =
-  | { kind: "stored"; path: string; url: string }
-  | { kind: "new"; file: File; url: string; key: string };
+type ImageItem = { kind: "stored"; path: string; url: string } | { kind: "new"; file: File; url: string; key: string };
 
 const NONE = "none";
 
@@ -77,11 +77,21 @@ export function ContentForm({
   const [hashtags, setHashtags] = useState(initial?.hashtags ?? startCampaignRow?.default_hashtags ?? "");
   const [link, setLink] = useState(initial?.link_url ?? startCampaignRow?.default_link ?? "");
   const [images, setImages] = useState<ImageItem[]>(
-    (initial?.images ?? []).map((path) => ({ kind: "stored", path, url: publicImageUrl("content-images", path) }))
+    (initial?.images ?? []).map((path) => ({
+      kind: "stored",
+      path,
+      url: publicImageUrl("content-images", path),
+    })),
   );
   const [assignee, setAssignee] = useState(initial?.assignee_id ?? me.id);
-  const [reviewer, setReviewer] = useState(
-    initial?.reviewer_id ?? team.find((p) => p.role === "owner")?.id ?? NONE
+  const [reviewer, setReviewer] = useState(initial?.reviewer_id ?? team.find((p) => p.role === "owner")?.id ?? NONE);
+  const designers = useMemo(() => team.filter((p) => isDesigner(p)), [team]);
+  const iAmDesigner = isDesigner(me);
+  const [graphicStatus, setGraphicStatus] = useState<GraphicStatus | null>(initial?.graphic_status ?? null);
+  const [designerId, setDesignerId] = useState(initial?.designer_id ?? designers[0]?.id ?? NONE);
+  const [graphicNote, setGraphicNote] = useState(initial?.graphic_note ?? "");
+  const [markDelivered, setMarkDelivered] = useState(
+    iAmDesigner && initial?.graphic_status === "requested" && initial?.designer_id === me.id,
   );
   const [date, setDate] = useState(initialWhen.date);
   const [time, setTime] = useState(initialWhen.time || "10:00");
@@ -145,6 +155,7 @@ export function ContentForm({
       if (!copy[p.id].trim()) return toast.error(`Write the ${p.label} copy.`);
     }
     if (xOn && xOver) return toast.error(`X copy is over ${X_CHAR_LIMIT} characters.`);
+    if (graphicStatus === "requested" && designerId === NONE) return toast.error("Pick a designer for the graphic.");
     if (campaign && date) {
       if ((campaign.start_date && date < campaign.start_date) || (campaign.end_date && date > campaign.end_date)) {
         return toast.error(`Pick a date within the campaign: ${campaignDateRange(campaign)}.`);
@@ -186,7 +197,13 @@ export function ContentForm({
         reviewer_id: reviewer === NONE ? null : reviewer,
         publish_at: publishAt,
         campaign_id: campaignId === NONE ? null : campaignId,
+        graphic_status: graphicStatus === "requested" && markDelivered ? ("delivered" as const) : graphicStatus,
+        designer_id: graphicStatus && designerId !== NONE ? designerId : null,
+        graphic_note: graphicStatus ? graphicNote.trim() || null : null,
       };
+      const newlyRequested =
+        row.graphic_status === "requested" &&
+        (initial?.graphic_status !== "requested" || initial?.designer_id !== row.designer_id);
 
       let id = initial?.id;
       if (editing && id) {
@@ -204,7 +221,16 @@ export function ContentForm({
         id = data.id as string;
       }
 
-      toast.success(editing ? "Content updated." : "Content created.");
+      const designerName = designers.find((d) => d.id === row.designer_id)?.full_name ?? "the designer";
+      toast.success(
+        newlyRequested
+          ? `${editing ? "Saved" : "Created"}. Graphic requested from ${designerName}.`
+          : row.graphic_status === "delivered" && initial?.graphic_status !== "delivered"
+            ? "Saved and marked the graphic as delivered."
+            : editing
+              ? "Content updated."
+              : "Content created.",
+      );
       router.push(`/content/${id}`);
       router.refresh();
     } catch (err) {
@@ -238,9 +264,7 @@ export function ContentForm({
                   ))}
                 </SelectContent>
               </Select>
-              {campaign ? (
-                <span className="text-sm text-muted-foreground">{campaignDateRange(campaign)}</span>
-              ) : null}
+              {campaign ? <span className="text-sm text-muted-foreground">{campaignDateRange(campaign)}</span> : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="title">Title</Label>
@@ -318,7 +342,9 @@ export function ContentForm({
                   {p.id === "x" ? (
                     <span
                       aria-live="polite"
-                      className={xOver ? "text-sm font-bold text-navy-800" : "text-sm font-medium text-muted-foreground"}
+                      className={
+                        xOver ? "text-sm font-bold text-navy-800" : "text-sm font-medium text-muted-foreground"
+                      }
                     >
                       {xChars} / {X_CHAR_LIMIT} characters
                     </span>
@@ -409,6 +435,148 @@ export function ContentForm({
 
         <Card>
           <fieldset className="flex flex-col gap-5">
+            <legend id="graphic" className="mb-5 scroll-mt-6 text-xl font-extrabold">
+              Graphic
+            </legend>
+            {graphicStatus === null ? (
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {iAmDesigner
+                    ? "No graphic has been requested for this post."
+                    : "Need a custom graphic? Request one and a designer is added to this post to provide it later."}
+                </p>
+                {!iAmDesigner ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={designers.length === 0}
+                      onClick={() => {
+                        setGraphicStatus("requested");
+                        if (designerId === NONE && designers[0]) setDesignerId(designers[0].id);
+                      }}
+                    >
+                      <Palette className="text-blue-600" strokeWidth={2.5} />
+                      Request graphic
+                    </Button>
+                    {designers.length === 0 ? (
+                      <p className="text-[13px] text-muted-foreground">
+                        {me.role === "owner" ? (
+                          <>
+                            No designers on the team yet. Give someone the Designer role under{" "}
+                            <Link href="/team" className="font-bold text-blue-600">
+                              Team access
+                            </Link>
+                            .
+                          </>
+                        ) : (
+                          "No designers on the team yet. Ask the owner to add one."
+                        )}
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <span
+                  className={
+                    graphicStatus === "requested"
+                      ? "flex items-center gap-2 self-start rounded-md border-l-4 border-cyan-300 bg-ice-100 px-3 py-2 text-sm font-bold"
+                      : "flex items-center gap-2 self-start rounded-md border-l-4 border-blue-600 bg-ice-100 px-3 py-2 text-sm font-bold"
+                  }
+                >
+                  {graphicStatus === "requested" ? (
+                    <Palette className="size-4 text-blue-600" strokeWidth={2.5} aria-hidden />
+                  ) : (
+                    <CheckCircle2 className="size-4 text-blue-600" strokeWidth={2.5} aria-hidden />
+                  )}
+                  {graphicStatus === "requested"
+                    ? initial?.graphic_status === "requested"
+                      ? "Graphic requested"
+                      : "Graphic will be requested when you save"
+                    : "Graphic delivered"}
+                </span>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
+                  <div className="flex flex-col gap-2">
+                    <Label id="designer-label">Designer</Label>
+                    <Select value={designerId} onValueChange={setDesignerId} disabled={iAmDesigner}>
+                      <SelectTrigger aria-labelledby="designer-label">
+                        <SelectValue placeholder="Pick a designer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {designerId === NONE ? (
+                          <SelectItem value={NONE} disabled>
+                            Pick a designer
+                          </SelectItem>
+                        ) : null}
+                        {designers.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.full_name ?? "Designer"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="graphic-note">What should the graphic show?</Label>
+                  <Textarea
+                    id="graphic-note"
+                    rows={3}
+                    maxLength={1000}
+                    className="min-h-20"
+                    readOnly={iAmDesigner}
+                    placeholder="For example: speaker card for Priya with her photo, talk title and session time"
+                    value={graphicNote}
+                    onChange={(e) => setGraphicNote(e.target.value)}
+                  />
+                  <span className="text-[13px] text-muted-foreground">
+                    The designer uploads the graphic in the Images section.
+                  </span>
+                </div>
+                {iAmDesigner && graphicStatus === "requested" ? (
+                  <label className="flex cursor-pointer items-center gap-3 rounded-md border border-input px-4 py-3">
+                    <Checkbox checked={markDelivered} onCheckedChange={(v) => setMarkDelivered(v === true)} />
+                    <span className="text-[15px] font-bold">
+                      The graphic is in the Images section: mark it delivered
+                    </span>
+                  </label>
+                ) : null}
+                {!iAmDesigner ? (
+                  <div className="flex flex-wrap gap-3">
+                    {graphicStatus === "delivered" ? (
+                      <Button type="button" variant="outline" onClick={() => setGraphicStatus("requested")}>
+                        <Palette className="text-blue-600" strokeWidth={2.5} />
+                        Request a new version
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        if (initial?.graphic_status === "delivered" && graphicStatus === "requested") {
+                          setGraphicStatus("delivered");
+                        } else {
+                          setGraphicStatus(null);
+                        }
+                      }}
+                    >
+                      {graphicStatus === "requested" && initial?.graphic_status === "delivered"
+                        ? "Keep the delivered graphic"
+                        : graphicStatus === "requested"
+                          ? "Cancel graphic request"
+                          : "Remove designer"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </fieldset>
+        </Card>
+
+        <Card>
+          <fieldset className="flex flex-col gap-5">
             <legend className="mb-5 text-xl font-extrabold">Team and timing</legend>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
               <div className="flex flex-col gap-2">
@@ -489,7 +657,9 @@ export function ContentForm({
               <div aria-hidden className="h-2 overflow-hidden rounded-full bg-ice-100">
                 <div
                   className={xOver ? "h-full rounded-full bg-orange-500" : "h-full rounded-full bg-blue-600"}
-                  style={{ width: `${Math.min(100, Math.round((xChars / X_CHAR_LIMIT) * 100))}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.round((xChars / X_CHAR_LIMIT) * 100))}%`,
+                  }}
                 />
               </div>
               {xOver ? (

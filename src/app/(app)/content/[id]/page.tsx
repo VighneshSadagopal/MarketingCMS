@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, PencilLine } from "lucide-react";
+import { CalendarDays, CheckCircle2, Palette, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { ActivityFeed } from "@/components/content/activity-feed";
 import { DeadlineLabel } from "@/components/content/deadline-label";
+import { GraphicActions } from "@/components/content/graphic-actions";
 import { SocialPreviews } from "@/components/content/social-previews";
 import { StatusActions } from "@/components/content/status-actions";
 import { UserAvatar } from "@/components/user-avatar";
@@ -65,6 +66,8 @@ export default async function ContentDetailPage({
   const author = item.author_id ? byId.get(item.author_id) : undefined;
   const reviewer = item.reviewer_id ? byId.get(item.reviewer_id) : undefined;
   const assignee = item.assignee_id ? byId.get(item.assignee_id) : undefined;
+  const designer = item.designer_id ? byId.get(item.designer_id) : undefined;
+  const canDeliver = item.graphic_status === "requested" && (item.designer_id === me.id || me.role === "owner");
   const meta = statusMeta(item.status);
   const imageUrls = item.images.map((p) => publicImageUrl("content-images", p));
   const isOwner = me.role === "owner";
@@ -99,12 +102,38 @@ export default async function ContentDetailPage({
             </Badge>
           </div>
           {campaign ? (
-            <Link href={`/campaigns/${campaign.id}`} className="self-start no-underline" aria-label={`Campaign: ${campaign.name}`}>
+            <Link
+              href={`/campaigns/${campaign.id}`}
+              className="self-start no-underline"
+              aria-label={`Campaign: ${campaign.name}`}
+            >
               <CampaignTag campaign={campaign} className="px-3 py-1 text-[13px] hover:border-input" />
             </Link>
           ) : null}
           <DeadlineLabel item={item} showDetail className="self-start" />
           {item.brief ? <p className="max-w-3xl text-sm text-muted-foreground">{item.brief}</p> : null}
+          {item.graphic_status ? (
+            <div
+              className={
+                item.graphic_status === "requested"
+                  ? "flex max-w-3xl flex-col gap-3 rounded-md border-l-4 border-cyan-300 bg-ice-100 px-4 py-3"
+                  : "flex max-w-3xl flex-col gap-3 rounded-md border-l-4 border-blue-600 bg-ice-100 px-4 py-3"
+              }
+            >
+              <span className="flex items-center gap-2 text-sm font-bold">
+                {item.graphic_status === "requested" ? (
+                  <Palette className="size-4 text-blue-600" strokeWidth={2.5} aria-hidden />
+                ) : (
+                  <CheckCircle2 className="size-4 text-blue-600" strokeWidth={2.5} aria-hidden />
+                )}
+                {item.graphic_status === "requested"
+                  ? `Graphic requested from ${designer?.full_name ?? "a designer"}`
+                  : `Graphic delivered by ${designer?.full_name ?? "the designer"}`}
+              </span>
+              {item.graphic_note ? <p className="text-sm">{item.graphic_note}</p> : null}
+              {canDeliver ? <GraphicActions id={item.id} hasImages={item.images.length > 0} /> : null}
+            </div>
+          ) : null}
           {openRequests.length ? (
             <a
               href="#activity"
@@ -128,6 +157,13 @@ export default async function ContentDetailPage({
         <Person label="Author" profile={author} />
         <Person label="Assignee" profile={assignee} />
         <Person label="Reviewer" profile={reviewer} suffix={reviewer?.role === "owner" ? "Owner" : undefined} />
+        {item.graphic_status ? (
+          <Person
+            label="Designer"
+            profile={designer}
+            suffix={item.graphic_status === "requested" ? "Graphic requested" : "Delivered"}
+          />
+        ) : null}
         <div className="flex flex-col gap-2">
           <dt className="text-[13px] font-semibold text-muted-foreground">Target publish</dt>
           <dd className="flex min-h-8 items-center gap-2 text-[15px] font-bold">

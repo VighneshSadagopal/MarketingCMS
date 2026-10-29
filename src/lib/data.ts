@@ -20,7 +20,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
 
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url, role")
+    .select("id, full_name, avatar_url, role, team_role")
     .eq("id", user.id)
     .single();
 
@@ -30,6 +30,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
       full_name: user.email ?? null,
       avatar_url: null,
       role: "member",
+      team_role: "content_manager",
     }
   );
 });
@@ -38,7 +39,7 @@ export const getTeam = cache(async (): Promise<Profile[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url, role")
+    .select("id, full_name, avatar_url, role, team_role")
     .order("full_name");
   return (data as Profile[] | null) ?? [];
 });
@@ -143,19 +144,36 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
   return (data as TeamMember[]) ?? [];
 }
 
-/** Posts assigned to one person, and posts waiting for their review. */
-export async function getWorkFor(userId: string): Promise<{ assigned: Content[]; toReview: Content[] }> {
+/** Posts assigned to one person, posts waiting for their review, and graphics asked of them. */
+export async function getWorkFor(
+  userId: string,
+): Promise<{ assigned: Content[]; toReview: Content[]; graphics: Content[] }> {
   const supabase = await createClient();
-  const [assigned, toReview] = await Promise.all([
-    supabase.from("content").select("*").eq("assignee_id", userId).order("publish_at", { ascending: true, nullsFirst: false }),
+  const [assigned, toReview, graphics] = await Promise.all([
+    supabase
+      .from("content")
+      .select("*")
+      .eq("assignee_id", userId)
+      .order("publish_at", { ascending: true, nullsFirst: false }),
     supabase
       .from("content")
       .select("*")
       .eq("reviewer_id", userId)
       .eq("status", "ready_for_review")
       .order("publish_at", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("content")
+      .select("*")
+      .eq("designer_id", userId)
+      .not("graphic_status", "is", null)
+      .order("publish_at", { ascending: true, nullsFirst: false }),
   ]);
   if (assigned.error) throw new Error(assigned.error.message);
   if (toReview.error) throw new Error(toReview.error.message);
-  return { assigned: (assigned.data as Content[]) ?? [], toReview: (toReview.data as Content[]) ?? [] };
+  if (graphics.error) throw new Error(graphics.error.message);
+  return {
+    assigned: (assigned.data as Content[]) ?? [],
+    toReview: (toReview.data as Content[]) ?? [],
+    graphics: (graphics.data as Content[]) ?? [],
+  };
 }

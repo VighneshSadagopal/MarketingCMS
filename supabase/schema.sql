@@ -690,3 +690,257 @@ drop trigger if exists content_sync_idea_date on public.content;
 create trigger content_sync_idea_date
   after update of publish_at on public.content
   for each row execute function public.content_sync_idea_date();
+
+-- ---------------------------------------------------------------------------
+-- Team roles: Content manager and Designer (the owner assigns them).
+-- Designers can't create posts or ideas; content managers can request a
+-- graphic, which assigns a designer to the post.
+-- ---------------------------------------------------------------------------
+do $$ begin
+  create type public.team_role as enum ('content_manager', 'designer');
+exception when duplicate_object then null; end $$;
+
+alter table public.profiles add column if not exists team_role public.team_role not null default 'content_manager';
+alter table public.allowed_emails add column if not exists team_role public.team_role not null default 'content_manager';
+
+create or replace function public.is_designer()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and team_role = 'designer' and role <> 'owner');
+$$;
+
+grant execute on function public.is_designer() to authenticated;
+
+-- People can't change their own role or team role.
+drop policy if exists "users update own profile" on public.profiles;
+create policy "users update own profile" on public.profiles
+  for update to authenticated
+  using (id = auth.uid())
+  with check (
+    id = auth.uid()
+    and role = (select p.role from public.profiles p where p.id = auth.uid())
+    and team_role = (select p.team_role from public.profiles p where p.id = auth.uid())
+  );
+
+-- Designers can't create posts, and so can't add calendar ideas (each idea creates a post).
+drop policy if exists "team creates content" on public.content;
+create policy "team creates content" on public.content
+  for insert to authenticated with check (author_id = auth.uid() and not public.is_designer());
+
+drop policy if exists "team adds ideas" on public.post_ideas;
+create policy "team adds ideas" on public.post_ideas
+  for insert to authenticated with check (created_by = auth.uid() and not public.is_designer());
+
+-- New accounts take their role and team role from the allowlist.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, avatar_url, role, team_role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data ->> 'avatar_url',
+    coalesce((select a.role from public.allowed_emails a where a.email = lower(new.email)), 'member'),
+    coalesce((select a.team_role from public.allowed_emails a where a.email = lower(new.email)), 'content_manager')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- Owner's team list now includes each person's team role.
+drop function if exists public.team_members();
+create or replace function public.team_members()
+returns table (email text, role public.user_role, team_role public.team_role, added_at timestamptz, joined boolean,
+               user_id uuid, full_name text, avatar_url text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Only the owner can see the team list.' using errcode = '42501';
+  end if;
+  return query
+    select a.email, a.role, a.team_role, a.created_at, u.id is not null, u.id, p.full_name, p.avatar_url
+    from public.allowed_emails a
+    left join auth.users u on lower(u.email) = a.email
+    left join public.profiles p on p.id = u.id
+    order by (a.role = 'owner') desc, a.created_at;
+end;
+$$;
+
+grant execute on function public.team_members() to authenticated;
+
+-- Owner changes someone's team role (on the allowlist and, once they've signed in, their profile).
+create or replace function public.set_team_role(p_email text, p_team_role public.team_role)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(btrim(p_email));
+begin
+  if not public.is_owner() then
+    raise exception 'Only the owner can change roles.' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.allowed_emails where email = v_email and role = 'owner') then
+    raise exception 'The owner''s role can''t be changed.' using errcode = '42501';
+  end if;
+  update public.allowed_emails set team_role = p_team_role where email = v_email;
+  if not found then
+    raise exception 'That email isn''t on the team list.' using errcode = 'P0002';
+  end if;
+  update public.profiles set team_role = p_team_role
+  where id in (select id from auth.users where lower(email) = v_email);
+end;
+$$;
+
+grant execute on function public.set_team_role(text, public.team_role) to authenticated;
+
+-- Graphic requests on a post.
+alter table public.content add column if not exists designer_id uuid references public.profiles (id) on delete set null;
+alter table public.content add column if not exists graphic_status text;
+alter table public.content add column if not exists graphic_note text;
+alter table public.content add column if not exists graphic_requested_at timestamptz;
+alter table public.content drop constraint if exists content_graphic_status_check;
+alter table public.content add constraint content_graphic_status_check
+  check (graphic_status is null or graphic_status in ('requested', 'delivered'));
+alter table public.content drop constraint if exists content_graphic_note_len;
+alter table public.content add constraint content_graphic_note_len
+  check (graphic_note is null or char_length(graphic_note) <= 1000);
+
+create index if not exists content_designer_idx on public.content (designer_id) where designer_id is not null;
+
+-- Only designers can be put on a graphic request; only content managers and the owner can request one.
+create or replace function public.content_graphic_rules()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.graphic_status = 'requested'
+     and (tg_op = 'INSERT' or old.graphic_status is distinct from 'requested' or old.designer_id is distinct from new.designer_id) then
+    if public.is_designer() then
+      raise exception 'Only content managers can request a graphic.' using errcode = '42501';
+    end if;
+    if new.designer_id is null
+       or not exists (select 1 from public.profiles where id = new.designer_id and team_role = 'designer') then
+      raise exception 'Pick a designer for the graphic request.' using errcode = '23514';
+    end if;
+    if tg_op = 'INSERT' or old.graphic_status is distinct from 'requested' then
+      new.graphic_requested_at := now();
+    end if;
+  end if;
+  if new.graphic_status is null then
+    new.designer_id := null;
+    new.graphic_note := null;
+    new.graphic_requested_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_graphic_rules on public.content;
+create trigger content_graphic_rules
+  before insert or update of graphic_status, designer_id on public.content
+  for each row execute function public.content_graphic_rules();
+
+-- Log graphic requests and deliveries in the post's activity.
+create or replace function public.content_log_graphic()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_old text := case when tg_op = 'UPDATE' then old.graphic_status end;
+  v_old_designer uuid := case when tg_op = 'UPDATE' then old.designer_id end;
+begin
+  if new.graphic_status = 'requested' and (v_old is distinct from 'requested' or v_old_designer is distinct from new.designer_id) then
+    select coalesce(full_name, 'a designer') into v_name from public.profiles where id = new.designer_id;
+    insert into public.content_comments (content_id, author_id, kind, body)
+    values (new.id, auth.uid(), 'status',
+            left('requested a graphic from ' || coalesce(v_name, 'a designer')
+                 || coalesce(': ' || nullif(btrim(new.graphic_note), ''), ''), 2000));
+  elsif new.graphic_status = 'delivered' and v_old is distinct from 'delivered' then
+    insert into public.content_comments (content_id, author_id, kind, body)
+    values (new.id, auth.uid(), 'status', 'delivered the graphic');
+  elsif new.graphic_status is null and v_old is not null then
+    insert into public.content_comments (content_id, author_id, kind, body)
+    values (new.id, auth.uid(), 'status', 'cancelled the graphic request');
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists content_log_graphic on public.content;
+create trigger content_log_graphic
+  after insert or update of graphic_status, designer_id on public.content
+  for each row execute function public.content_log_graphic();
+
+-- Friendly error for designers trying to add a calendar idea.
+create or replace function public.create_post_idea(
+  p_idea_date date,
+  p_text text,
+  p_platforms text[],
+  p_campaign_id uuid default null
+)
+returns public.post_ideas
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_content_id uuid;
+  v_idea public.post_ideas;
+  v_text text := btrim(p_text);
+  v_tags text;
+  v_link text;
+begin
+  if public.is_designer() then
+    raise exception 'Designers can''t add post ideas.' using errcode = '42501';
+  end if;
+
+  if p_campaign_id is not null then
+    select default_hashtags, default_link into v_tags, v_link
+    from public.campaigns where id = p_campaign_id;
+  end if;
+
+  insert into public.content (title, brief, status, platforms, author_id, assignee_id, publish_at,
+                              campaign_id, hashtags, link_url)
+  values (
+    left(v_text, 200),
+    case when char_length(v_text) > 200 then v_text end,
+    'todo',
+    coalesce(p_platforms, '{}'),
+    auth.uid(),
+    auth.uid(),
+    (p_idea_date + time '10:00') at time zone 'Asia/Kolkata',
+    p_campaign_id,
+    v_tags,
+    v_link
+  )
+  returning id into v_content_id;
+
+  insert into public.post_ideas (idea_date, text, platforms, created_by, content_id, campaign_id)
+  values (p_idea_date, v_text, coalesce(p_platforms, '{}'), auth.uid(), v_content_id, p_campaign_id)
+  returning * into v_idea;
+
+  return v_idea;
+end;
+$$;
+
+grant execute on function public.create_post_idea(date, text, text[], uuid) to authenticated;

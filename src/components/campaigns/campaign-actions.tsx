@@ -9,7 +9,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
-export function CampaignActions({ id, canDelete }: { id: string; canDelete: boolean }) {
+export function CampaignActions({
+  id,
+  canDelete,
+  canAddPost = true,
+}: {
+  id: string;
+  canDelete: boolean;
+  canAddPost?: boolean;
+}) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -36,12 +44,14 @@ export function CampaignActions({ id, canDelete }: { id: string; canDelete: bool
           Edit
         </Link>
       </Button>
-      <Button asChild>
-        <Link href={`/content/new?campaign=${id}`}>
-          <Plus strokeWidth={2.5} />
-          Add post
-        </Link>
-      </Button>
+      {canAddPost ? (
+        <Button asChild>
+          <Link href={`/content/new?campaign=${id}`}>
+            <Plus strokeWidth={2.5} />
+            Add post
+          </Link>
+        </Button>
+      ) : null}
       {canDelete ? (
         confirming ? (
           <span className="flex items-center gap-2">

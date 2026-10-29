@@ -31,6 +31,7 @@ import {
   type Content,
   type ContentStatus,
   type Profile,
+  canCreateContent,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +69,7 @@ export function KanbanBoard({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor)
+    useSensor(KeyboardSensor),
   );
 
   const visible = items.filter((c) => {
@@ -76,7 +77,14 @@ export function KanbanBoard({
     if (platform !== "all" && !c.platforms.includes(platform as Content["platforms"][number])) return false;
     if (campaignFilter === "none" && c.campaign_id) return false;
     if (campaignFilter !== "all" && campaignFilter !== "none" && c.campaign_id !== campaignFilter) return false;
-    if (member && c.author_id !== member && c.assignee_id !== member && c.reviewer_id !== member) return false;
+    if (
+      member &&
+      c.author_id !== member &&
+      c.assignee_id !== member &&
+      c.reviewer_id !== member &&
+      c.designer_id !== member
+    )
+      return false;
     return true;
   });
 
@@ -182,7 +190,7 @@ export function KanbanBoard({
               onClick={() => setMember(member === p.id ? null : p.id)}
               className={cn(
                 "-ml-2 cursor-pointer rounded-full border-[3px]",
-                member === p.id ? "border-blue-600" : "border-ice-100"
+                member === p.id ? "border-blue-600" : "border-ice-100",
               )}
             >
               <UserAvatar profile={p} className="size-10" />
@@ -201,6 +209,7 @@ export function KanbanBoard({
                 label={s.label}
                 dot={s.dot}
                 locked={!isOwner && OWNER_ONLY_STATUSES.includes(s.id)}
+                canCreate={canCreateContent(me)}
                 items={visible.filter((c) => c.status === s.id).sort((a, b) => a.position - b.position)}
                 teamById={teamById}
                 campaignById={campaignById}
@@ -230,6 +239,7 @@ function Column({
   label,
   dot,
   locked,
+  canCreate,
   items,
   teamById,
   campaignById,
@@ -240,6 +250,7 @@ function Column({
   label: string;
   dot: string;
   locked: boolean;
+  canCreate: boolean;
   items: Content[];
   teamById: Map<string, Profile>;
   campaignById: Map<string, Campaign>;
@@ -254,7 +265,7 @@ function Column({
       aria-label={label}
       className={cn(
         "flex min-h-40 flex-col gap-3 rounded-2xl border bg-navy-800/5 p-3 transition-colors",
-        isOver ? "border-blue-600 bg-blue-600/10" : "border-border"
+        isOver ? "border-blue-600 bg-blue-600/10" : "border-border",
       )}
     >
       <div className="flex min-h-9 items-center justify-between gap-2 px-1 pt-1">
@@ -269,7 +280,7 @@ function Column({
             {items.length}
           </span>
         </h2>
-        {status === "todo" ? (
+        {status === "todo" && canCreate ? (
           <Link
             href="/content/new"
             aria-label="Add content to Todo"

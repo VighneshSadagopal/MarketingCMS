@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile } from "@/lib/types";
+import { roleLabel, type Profile } from "@/lib/types";
 
 export function UserMenu({ profile }: { profile: Profile }) {
   const router = useRouter();
@@ -38,14 +38,14 @@ export function UserMenu({ profile }: { profile: Profile }) {
         />
         <span className="hidden flex-col items-start gap-0.5 sm:flex">
           <span className="text-sm font-bold">{name}</span>
-          <span className="text-xs text-ice-100/70 capitalize">{profile.role}</span>
+          <span className="text-xs text-ice-100/70">{roleLabel(profile)}</span>
         </span>
         <ChevronDown className="size-4" strokeWidth={2.5} aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>
           <span className="block font-bold">{name}</span>
-          <span className="block text-xs text-muted-foreground capitalize">{profile.role}</span>
+          <span className="block text-xs text-muted-foreground">{roleLabel(profile)}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

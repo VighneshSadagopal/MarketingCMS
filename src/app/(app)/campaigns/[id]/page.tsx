@@ -9,6 +9,7 @@ import { getCampaign, getCampaignContent, getCurrentProfile, getTeam } from "@/l
 import {
   STATUSES,
   campaignDateRange,
+  canCreateContent,
   campaignStatusLabel,
   platformLabel,
   statusMeta,
@@ -22,8 +23,15 @@ const dayFmt = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   timeZone: "Asia/Kolkata",
 });
-const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
-const gapFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const timeFmt = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Kolkata",
+});
+const gapFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+});
 
 const GAP_DAYS = 7;
 
@@ -46,7 +54,11 @@ function findGaps(posts: Content[], start: string | null, end: string | null) {
 
   for (let d = parseDate(start); d <= last; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
     if (busy.has(toIsoDate(d))) {
-      if (runStart && runLength >= GAP_DAYS) gaps.push({ from: runStart, to: new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) });
+      if (runStart && runLength >= GAP_DAYS)
+        gaps.push({
+          from: runStart,
+          to: new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1),
+        });
       runStart = null;
       runLength = 0;
     } else {
@@ -104,7 +116,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           </span>
           {campaign.brief ? <p className="max-w-3xl text-[15px] leading-relaxed">{campaign.brief}</p> : null}
         </div>
-        <CampaignActions id={campaign.id} canDelete={me.role === "owner" || campaign.created_by === me.id} />
+        <CampaignActions
+          id={campaign.id}
+          canDelete={me.role === "owner" || campaign.created_by === me.id}
+          canAddPost={canCreateContent(me)}
+        />
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
@@ -148,7 +164,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   <span
                     aria-hidden
                     className="absolute top-1.5 left-0 size-3 rounded-full border-2 border-white"
-                    style={{ background: campaign.color, boxShadow: "0 0 0 1.5px rgba(3,26,75,0.35)" }}
+                    style={{
+                      background: campaign.color,
+                      boxShadow: "0 0 0 1.5px rgba(3,26,75,0.35)",
+                    }}
                   />
                   <div className="w-28 shrink-0 text-sm">
                     <span className="block font-bold">{dayFmt.format(d)}</span>
@@ -161,7 +180,14 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-bold">{p.title}</span>
                       <Badge variant="outline">
-                        <span aria-hidden className="size-2 rounded-full" style={{ background: meta.dot, boxShadow: "inset 0 0 0 1px rgba(3,26,75,0.35)" }} />
+                        <span
+                          aria-hidden
+                          className="size-2 rounded-full"
+                          style={{
+                            background: meta.dot,
+                            boxShadow: "inset 0 0 0 1px rgba(3,26,75,0.35)",
+                          }}
+                        />
                         {meta.label}
                       </Badge>
                     </div>
@@ -197,7 +223,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          <section aria-labelledby="progress-h" className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-6">
+          <section
+            aria-labelledby="progress-h"
+            className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-6"
+          >
             <h2 id="progress-h" className="text-xl font-extrabold">
               Progress
             </h2>
@@ -219,7 +248,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                     <span
                       aria-hidden
                       className="size-2.5 rounded-full"
-                      style={{ background: s.dot, boxShadow: "inset 0 0 0 1.5px rgba(3,26,75,0.35)" }}
+                      style={{
+                        background: s.dot,
+                        boxShadow: "inset 0 0 0 1.5px rgba(3,26,75,0.35)",
+                      }}
                     />
                     {s.label}
                   </dt>
@@ -228,7 +260,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               ))}
             </dl>
           </section>
-          <section aria-labelledby="defaults-h" className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-6">
+          <section
+            aria-labelledby="defaults-h"
+            className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-6"
+          >
             <h2 id="defaults-h" className="text-xl font-extrabold">
               Post defaults
             </h2>

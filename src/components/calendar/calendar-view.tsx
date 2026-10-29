@@ -14,14 +14,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import {
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  GripVertical,
-  Plus,
-  X as XIcon,
-} from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, GripVertical, Plus, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
@@ -29,17 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { createClient } from "@/lib/supabase/client";
 import {
+  canCreateContent,
   PLATFORMS,
   platformLabel,
   statusMeta,
@@ -98,22 +86,14 @@ function IdeaChip({ chip }: { chip: Chip }) {
       role={undefined}
       tabIndex={undefined}
       title="Drag to another date"
-      className={cn(
-        "w-full cursor-grab touch-none",
-        isDragging && "opacity-40",
-      )}
+      className={cn("w-full cursor-grab touch-none", isDragging && "opacity-40")}
     >
       <ChipBody chip={chip} />
     </span>
   );
 }
 
-function DayCell({
-  iso,
-  className,
-  children,
-  ...props
-}: React.ComponentProps<"button"> & { iso: string }) {
+function DayCell({ iso, className, children, ...props }: React.ComponentProps<"button"> & { iso: string }) {
   const { setNodeRef, isOver } = useDroppable({ id: iso });
   return (
     <button
@@ -160,54 +140,34 @@ export function CalendarView({
         : firstIso,
   );
   const [draft, setDraft] = useState("");
-  const [draftPlatforms, setDraftPlatforms] = useState<Platform[]>([
-    "linkedin",
-  ]);
+  const [draftPlatforms, setDraftPlatforms] = useState<Platform[]>(["linkedin"]);
   const [draftCampaign, setDraftCampaign] = useState(NO_CAMPAIGN);
   const [pending, startTransition] = useTransition();
   // Dates of ideas moved here but not yet confirmed by a refresh (so the chip moves at once).
   const [movedTo, setMovedTo] = useState<Record<string, string>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [moveDates, setMoveDates] = useState<Record<string, string>>({});
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const ideas = useMemo(
-    () =>
-      serverIdeas.map((i) =>
-        movedTo[i.id] ? { ...i, idea_date: movedTo[i.id] } : i,
-      ),
+    () => serverIdeas.map((i) => (movedTo[i.id] ? { ...i, idea_date: movedTo[i.id] } : i)),
     [serverIdeas, movedTo],
   );
 
   const ideasByDate = useMemo(() => {
     const map = new Map<string, PostIdea[]>();
-    for (const i of ideas)
-      map.set(i.idea_date, [...(map.get(i.idea_date) ?? []), i]);
+    for (const i of ideas) map.set(i.idea_date, [...(map.get(i.idea_date) ?? []), i]);
     return map;
   }, [ideas]);
 
-  const postsById = useMemo(
-    () => new Map(posts.map((p) => [p.id, p])),
-    [posts],
-  );
-  const campaignById = useMemo(
-    () => new Map(campaigns.map((c) => [c.id, c])),
-    [campaigns],
-  );
+  const postsById = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts]);
+  const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns]);
 
   const postsByDate = useMemo(() => {
     // A card created from an idea shows as that idea, not twice.
     // If the card was rescheduled to another date, it shows there as a planned post.
-    const ideaDateByContent = new Map(
-      ideas.filter((i) => i.content_id).map((i) => [i.content_id, i.idea_date]),
-    );
-    const movedCards = new Set(
-      ideas
-        .filter((i) => movedTo[i.id] && i.content_id)
-        .map((i) => i.content_id),
-    );
+    const ideaDateByContent = new Map(ideas.filter((i) => i.content_id).map((i) => [i.content_id, i.idea_date]));
+    const movedCards = new Set(ideas.filter((i) => movedTo[i.id] && i.content_id).map((i) => i.content_id));
     const map = new Map<string, Content[]>();
     for (const p of posts) {
       if (!p.publish_at || movedCards.has(p.id)) continue;
@@ -253,9 +213,7 @@ export function CalendarView({
   const selPosts = postsByDate.get(selected) ?? [];
   const selIdeas = ideasByDate.get(selected) ?? [];
   // Campaigns with something due in the visible weeks.
-  const visibleIds = new Set(
-    cells.flatMap((c) => campaignsOn(c.iso).map((x) => x.id)),
-  );
+  const visibleIds = new Set(cells.flatMap((c) => campaignsOn(c.iso).map((x) => x.id)));
   const monthCampaigns = campaigns.filter((c) => visibleIds.has(c.id));
 
   function addIdea(e: React.FormEvent) {
@@ -283,26 +241,18 @@ export function CalendarView({
   function removeIdea(idea: PostIdea) {
     startTransition(async () => {
       // Only the idea goes; its card stays on the board.
-      const { error } = await createClient()
-        .from("post_ideas")
-        .delete()
-        .eq("id", idea.id);
+      const { error } = await createClient().from("post_ideas").delete().eq("id", idea.id);
       if (error) {
         toast.error(error.message);
         return;
       }
-      toast.success(
-        idea.content_id
-          ? "Idea removed. Its card stays on the board."
-          : "Idea removed.",
-      );
+      toast.success(idea.content_id ? "Idea removed. Its card stays on the board." : "Idea removed.");
       router.refresh();
     });
   }
 
   function moveIdea(idea: PostIdea, newDate: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || newDate === idea.idea_date)
-      return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || newDate === idea.idea_date) return;
     setMovedTo((m) => ({ ...m, [idea.id]: newDate }));
     startTransition(async () => {
       // Moves the idea and its card's target date (same time of day).
@@ -319,15 +269,8 @@ export function CalendarView({
         toast.error(error.message);
         return;
       }
-      const label = new Date(newDate + "T00:00:00").toLocaleDateString(
-        "en-GB",
-        { day: "numeric", month: "long" },
-      );
-      toast.success(
-        idea.content_id
-          ? `Idea and its card moved to ${label}.`
-          : `Idea moved to ${label}.`,
-      );
+      const label = new Date(newDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+      toast.success(idea.content_id ? `Idea and its card moved to ${label}.` : `Idea moved to ${label}.`);
       router.refresh();
     });
   }
@@ -351,9 +294,7 @@ export function CalendarView({
           <span className="font-label text-[13px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
             DrupalAsia Connect India 2027
           </span>
-          <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">
-            Social media calendar
-          </h1>
+          <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">Social media calendar</h1>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-4 text-[13px] font-semibold text-muted-foreground">
@@ -362,33 +303,21 @@ export function CalendarView({
               Planned post
             </span>
             <span className="flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className="size-3.5 rounded-sm border-[1.5px] border-dashed border-input bg-white"
-              />
+              <span aria-hidden className="size-3.5 rounded-sm border-[1.5px] border-dashed border-input bg-white" />
               Idea
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" asChild>
-              <Link
-                href={`/calendar?month=${monthParam(year, month - 1)}`}
-                aria-label="Previous month"
-              >
+              <Link href={`/calendar?month=${monthParam(year, month - 1)}`} aria-label="Previous month">
                 <ChevronLeft strokeWidth={2.5} />
               </Link>
             </Button>
-            <h2
-              aria-live="polite"
-              className="min-w-44 text-center text-xl font-extrabold"
-            >
+            <h2 aria-live="polite" className="min-w-44 text-center text-xl font-extrabold">
               {monthLabel}
             </h2>
             <Button variant="outline" size="icon" asChild>
-              <Link
-                href={`/calendar?month=${monthParam(year, month + 1)}`}
-                aria-label="Next month"
-              >
+              <Link href={`/calendar?month=${monthParam(year, month + 1)}`} aria-label="Next month">
                 <ChevronRight strokeWidth={2.5} />
               </Link>
             </Button>
@@ -401,15 +330,9 @@ export function CalendarView({
 
       {monthCampaigns.length ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-bold text-muted-foreground">
-            Campaigns this month
-          </span>
+          <span className="text-[13px] font-bold text-muted-foreground">Campaigns this month</span>
           {monthCampaigns.map((c) => (
-            <Link
-              key={c.id}
-              href={`/campaigns/${c.id}`}
-              className="no-underline"
-            >
+            <Link key={c.id} href={`/campaigns/${c.id}`} className="no-underline">
               <CampaignTag campaign={c} className="hover:border-input" />
             </Link>
           ))}
@@ -421,10 +344,7 @@ export function CalendarView({
           <div className="min-w-[720px] rounded-2xl border border-border bg-white p-3">
             <div className="grid grid-cols-7 gap-1.5 pb-1.5">
               {WEEKDAYS.map((w) => (
-                <span
-                  key={w}
-                  className="px-2 py-1 text-[13px] font-bold text-muted-foreground"
-                >
+                <span key={w} className="px-2 py-1 text-[13px] font-bold text-muted-foreground">
                   {w}
                 </span>
               ))}
@@ -442,17 +362,13 @@ export function CalendarView({
                       key: p.id,
                       text: p.title,
                       kind: "post" as const,
-                      color: p.campaign_id
-                        ? campaignById.get(p.campaign_id)?.color
-                        : undefined,
+                      color: p.campaign_id ? campaignById.get(p.campaign_id)?.color : undefined,
                     })),
                     ...(ideasByDate.get(c.iso) ?? []).map((i) => ({
                       key: i.id,
                       text: i.text,
                       kind: "idea" as const,
-                      color: i.campaign_id
-                        ? campaignById.get(i.campaign_id)?.color
-                        : undefined,
+                      color: i.campaign_id ? campaignById.get(i.campaign_id)?.color : undefined,
                     })),
                   ];
                   const running = campaignsOn(c.iso);
@@ -467,12 +383,8 @@ export function CalendarView({
                       aria-label={`${c.date.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}, ${items.length} items`}
                       className={cn(
                         "flex min-h-[116px] min-w-0 cursor-pointer flex-col gap-1 rounded-md p-2 text-left",
-                        isSel
-                          ? "border-2 border-blue-600"
-                          : "border border-border hover:border-input",
-                        c.inMonth
-                          ? "bg-white text-navy-800"
-                          : "bg-ice-100/60 text-muted-foreground",
+                        isSel ? "border-2 border-blue-600" : "border border-border hover:border-input",
+                        c.inMonth ? "bg-white text-navy-800" : "bg-ice-100/60 text-muted-foreground",
                       )}
                     >
                       <span
@@ -484,16 +396,9 @@ export function CalendarView({
                         {c.date.getDate()}
                       </span>
                       {running.length ? (
-                        <span
-                          aria-hidden
-                          className="flex w-full flex-col gap-0.5"
-                        >
+                        <span aria-hidden className="flex w-full flex-col gap-0.5">
                           {running.slice(0, 3).map((rc) => (
-                            <span
-                              key={rc.id}
-                              className="h-1 w-full rounded-full"
-                              style={{ background: rc.color }}
-                            />
+                            <span key={rc.id} className="h-1 w-full rounded-full" style={{ background: rc.color }} />
                           ))}
                         </span>
                       ) : null}
@@ -507,9 +412,7 @@ export function CalendarView({
                           ),
                         )}
                       {items.length > MAX_CHIPS ? (
-                        <span className="px-1.5 text-xs font-bold">
-                          +{items.length - MAX_CHIPS} more
-                        </span>
+                        <span className="px-1.5 text-xs font-bold">+{items.length - MAX_CHIPS} more</span>
                       ) : null}
                     </DayCell>
                   );
@@ -524,9 +427,7 @@ export function CalendarView({
                         key: dragIdea.id,
                         text: dragIdea.text,
                         kind: "idea",
-                        color: dragIdea.campaign_id
-                          ? campaignById.get(dragIdea.campaign_id)?.color
-                          : undefined,
+                        color: dragIdea.campaign_id ? campaignById.get(dragIdea.campaign_id)?.color : undefined,
                       }}
                     />
                   </span>
@@ -564,8 +465,7 @@ export function CalendarView({
                 >
                   <span className="text-sm font-bold">{p.title}</span>
                   <span className="text-[13px] text-ice-100/70">
-                    {statusMeta(p.status).label} ·{" "}
-                    {p.platforms.map(platformLabel).join(", ")}
+                    {statusMeta(p.status).label} · {p.platforms.map(platformLabel).join(", ")}
                     {p.campaign_id && campaignById.get(p.campaign_id)
                       ? ` · ${campaignById.get(p.campaign_id)!.name}`
                       : ""}
@@ -577,10 +477,7 @@ export function CalendarView({
 
           <div className="flex flex-col gap-2">
             <h3 className="text-[15px] font-extrabold">
-              Ideas{" "}
-              <span className="font-semibold text-muted-foreground">
-                ({selIdeas.length})
-              </span>
+              Ideas <span className="font-semibold text-muted-foreground">({selIdeas.length})</span>
             </h3>
             {selIdeas.length ? (
               <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
@@ -589,25 +486,15 @@ export function CalendarView({
               </p>
             ) : null}
             {selIdeas.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No ideas for this date yet.
-              </p>
+              <p className="text-sm text-muted-foreground">No ideas for this date yet.</p>
             ) : null}
             {selIdeas.map((i) => (
-              <div
-                key={i.id}
-                className="flex flex-col gap-2 rounded-md border-[1.5px] border-dashed border-input p-3"
-              >
+              <div key={i.id} className="flex flex-col gap-2 rounded-md border-[1.5px] border-dashed border-input p-3">
                 <div className="flex items-start justify-between gap-2">
                   <span className="flex flex-col gap-1.5">
-                    <span className="text-sm leading-snug font-bold">
-                      {i.text}
-                    </span>
+                    <span className="text-sm leading-snug font-bold">{i.text}</span>
                     {i.campaign_id && campaignById.get(i.campaign_id) ? (
-                      <CampaignTag
-                        campaign={campaignById.get(i.campaign_id)!}
-                        className="self-start"
-                      />
+                      <CampaignTag campaign={campaignById.get(i.campaign_id)!} className="self-start" />
                     ) : null}
                   </span>
                   {i.created_by === me.id || me.role === "owner" ? (
@@ -616,11 +503,7 @@ export function CalendarView({
                       onClick={() => removeIdea(i)}
                       disabled={pending}
                       aria-label={`Remove idea: ${i.text}${i.content_id ? " (its card stays on the board)" : ""}`}
-                      title={
-                        i.content_id
-                          ? "Remove idea (the card stays on the board)"
-                          : "Remove idea"
-                      }
+                      title={i.content_id ? "Remove idea (the card stays on the board)" : "Remove idea"}
                       className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-ice-100"
                     >
                       <XIcon className="size-4" strokeWidth={2.5} />
@@ -629,21 +512,11 @@ export function CalendarView({
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[13px] font-semibold text-muted-foreground">
-                    {i.platforms.length
-                      ? i.platforms.map(platformLabel).join(", ")
-                      : "No platform yet"}
+                    {i.platforms.length ? i.platforms.map(platformLabel).join(", ") : "No platform yet"}
                   </span>
                   {i.content_id ? (
-                    <Link
-                      href={`/content/${i.content_id}`}
-                      className="text-[13px] font-bold text-blue-600"
-                    >
-                      {
-                        statusMeta(
-                          postsById.get(i.content_id)?.status ?? "todo",
-                        ).label
-                      }{" "}
-                      · Open card
+                    <Link href={`/content/${i.content_id}`} className="text-[13px] font-bold text-blue-600">
+                      {statusMeta(postsById.get(i.content_id)?.status ?? "todo").label} · Open card
                     </Link>
                   ) : null}
                 </div>
@@ -662,19 +535,13 @@ export function CalendarView({
                     type="date"
                     className="h-9 min-w-0 flex-1"
                     value={moveDates[i.id] ?? i.idea_date}
-                    onChange={(e) =>
-                      setMoveDates((m) => ({ ...m, [i.id]: e.target.value }))
-                    }
+                    onChange={(e) => setMoveDates((m) => ({ ...m, [i.id]: e.target.value }))}
                   />
                   <Button
                     type="submit"
                     variant="outline"
                     size="sm"
-                    disabled={
-                      pending ||
-                      !moveDates[i.id] ||
-                      moveDates[i.id] === i.idea_date
-                    }
+                    disabled={pending || !moveDates[i.id] || moveDates[i.id] === i.idea_date}
                   >
                     <CalendarClock strokeWidth={2.5} />
                     Move
@@ -684,64 +551,63 @@ export function CalendarView({
             ))}
           </div>
 
-          <form
-            onSubmit={addIdea}
-            className="flex flex-col gap-3 border-t border-border pt-5"
-          >
-            <Label htmlFor="idea" className="text-[15px] font-extrabold">
-              Add an idea for this date
-            </Label>
-            <Textarea
-              id="idea"
-              rows={3}
-              maxLength={500}
-              className="min-h-20"
-              placeholder="For example: a carousel introducing the workshop speakers"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-            <ToggleGroup
-              type="multiple"
-              value={draftPlatforms}
-              onValueChange={(v) => setDraftPlatforms(v as Platform[])}
-              aria-label="Platforms for this idea"
-            >
-              {PLATFORMS.map((p) => (
-                <ToggleGroupItem key={p.id} value={p.id}>
-                  {p.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {campaigns.length ? (
-              <div className="flex flex-col gap-2">
-                <Label id="idea-campaign-label">Campaign</Label>
-                <Select value={draftCampaign} onValueChange={setDraftCampaign}>
-                  <SelectTrigger aria-labelledby="idea-campaign-label">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_CAMPAIGN}>No campaign</SelectItem>
-                    {campaigns.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            aria-hidden
-                            className="size-2.5 rounded-full"
-                            style={{ background: c.color }}
-                          />
-                          {c.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <Button type="submit" disabled={pending || !draft.trim()}>
-              <Plus strokeWidth={2.5} />
-              Add idea
-            </Button>
-          </form>
+          {!canCreateContent(me) ? (
+            <p className="border-t border-border pt-5 text-sm text-muted-foreground">
+              Designers can&apos;t add post ideas. Ask a content manager to add one.
+            </p>
+          ) : (
+            <form onSubmit={addIdea} className="flex flex-col gap-3 border-t border-border pt-5">
+              <Label htmlFor="idea" className="text-[15px] font-extrabold">
+                Add an idea for this date
+              </Label>
+              <Textarea
+                id="idea"
+                rows={3}
+                maxLength={500}
+                className="min-h-20"
+                placeholder="For example: a carousel introducing the workshop speakers"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <ToggleGroup
+                type="multiple"
+                value={draftPlatforms}
+                onValueChange={(v) => setDraftPlatforms(v as Platform[])}
+                aria-label="Platforms for this idea"
+              >
+                {PLATFORMS.map((p) => (
+                  <ToggleGroupItem key={p.id} value={p.id}>
+                    {p.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {campaigns.length ? (
+                <div className="flex flex-col gap-2">
+                  <Label id="idea-campaign-label">Campaign</Label>
+                  <Select value={draftCampaign} onValueChange={setDraftCampaign}>
+                    <SelectTrigger aria-labelledby="idea-campaign-label">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CAMPAIGN}>No campaign</SelectItem>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="flex items-center gap-2">
+                            <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
+                            {c.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <Button type="submit" disabled={pending || !draft.trim()}>
+                <Plus strokeWidth={2.5} />
+                Add idea
+              </Button>
+            </form>
+          )}
         </Card>
       </div>
     </>

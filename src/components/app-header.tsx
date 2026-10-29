@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { MainNav } from "@/components/main-nav";
 import { UserMenu } from "@/components/user-menu";
 import { Button } from "@/components/ui/button";
-import type { Profile } from "@/lib/types";
+import { canCreateContent, type Profile } from "@/lib/types";
 
 export function AppHeader({ profile }: { profile: Profile }) {
   return (
@@ -21,12 +21,14 @@ export function AppHeader({ profile }: { profile: Profile }) {
       </div>
       <div className="flex items-center gap-4">
         {/* The only way to add content from the header, so it stays visible on phones (icon only there). */}
-        <Button asChild className="max-sm:size-11 max-sm:px-0">
-          <Link href="/content/new" aria-label="New content">
-            <Plus strokeWidth={2.5} />
-            <span className="max-sm:sr-only">New content</span>
-          </Link>
-        </Button>
+        {canCreateContent(profile) ? (
+          <Button asChild className="max-sm:size-11 max-sm:px-0">
+            <Link href="/content/new" aria-label="New content">
+              <Plus strokeWidth={2.5} />
+              <span className="max-sm:sr-only">New content</span>
+            </Link>
+          </Button>
+        ) : null}
         <UserMenu profile={profile} />
       </div>
     </header>

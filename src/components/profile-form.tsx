@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient, publicImageUrl } from "@/lib/supabase/client";
-import type { Profile } from "@/lib/types";
+import { roleLabel, type Profile } from "@/lib/types";
 
 export function ProfileForm({ profile }: { profile: Profile }) {
   const router = useRouter();
@@ -57,7 +57,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
       <div className="flex items-center gap-4">
         <UserAvatar profile={{ ...profile, full_name: name, avatar_url: avatarUrl }} className="size-20 text-xl" />
         <div className="flex flex-col gap-2">
-          <span className="text-sm text-muted-foreground capitalize">Role: {profile.role}</span>
+          <span className="text-sm text-muted-foreground">Role: {roleLabel(profile)}</span>
           <Button variant="outline" asChild disabled={busy}>
             <label className="cursor-pointer">
               Upload new avatar

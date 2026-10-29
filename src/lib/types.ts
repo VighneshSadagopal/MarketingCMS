@@ -45,12 +45,40 @@ export const MAX_IMAGES = 4;
 
 export type Role = "owner" | "member";
 
+export const TEAM_ROLES = [
+  { id: "content_manager", label: "Content manager" },
+  { id: "designer", label: "Designer" },
+] as const;
+
+export type TeamRole = (typeof TEAM_ROLES)[number]["id"];
+
+export function teamRoleLabel(id: string | null | undefined) {
+  return TEAM_ROLES.find((r) => r.id === id)?.label ?? "Content manager";
+}
+
 export type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   role: Role;
+  team_role: TeamRole;
 };
+
+/** The owner is the admin; everyone else is a content manager or a designer. */
+export function roleLabel(p: Pick<Profile, "role" | "team_role">) {
+  return p.role === "owner" ? "Owner" : teamRoleLabel(p.team_role);
+}
+
+/** Designers don't create posts or ideas (enforced in the database too). */
+export function canCreateContent(p: Pick<Profile, "role" | "team_role">) {
+  return p.role === "owner" || p.team_role !== "designer";
+}
+
+export function isDesigner(p: Pick<Profile, "role" | "team_role">) {
+  return p.role !== "owner" && p.team_role === "designer";
+}
+
+export type GraphicStatus = "requested" | "delivered";
 
 export type Content = {
   id: string;
@@ -70,6 +98,11 @@ export type Content = {
   publish_at: string | null;
   position: number;
   campaign_id: string | null;
+  /** Designer asked for a graphic, if any. */
+  designer_id: string | null;
+  graphic_status: GraphicStatus | null;
+  graphic_note: string | null;
+  graphic_requested_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -124,7 +157,11 @@ export type Campaign = {
   created_at: string;
 };
 
-const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const shortDate = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
 
 /** "1 Nov 2026 - 30 Jan 2027", or a fallback when dates are missing. */
 export function campaignDateRange(c: Pick<Campaign, "start_date" | "end_date">) {
@@ -159,6 +196,7 @@ export type CommentCounts = { comments: number; openRequests: number };
 export type TeamMember = {
   email: string;
   role: Role;
+  team_role: TeamRole;
   added_at: string;
   joined: boolean;
   user_id: string | null;

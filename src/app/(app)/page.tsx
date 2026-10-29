@@ -10,7 +10,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: Promi
 
   const isOwner = me.role === "owner";
   const viewing = (isOwner && person ? team.find((p) => p.id === person) : undefined) ?? me;
-  const { assigned, toReview } = await getWorkFor(viewing.id);
+  const { assigned, toReview, graphics } = await getWorkFor(viewing.id);
 
   return (
     <MyWork
@@ -19,6 +19,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: Promi
       team={isOwner ? team : []}
       assigned={assigned}
       toReview={toReview}
+      graphics={graphics}
       campaigns={campaigns}
     />
   );

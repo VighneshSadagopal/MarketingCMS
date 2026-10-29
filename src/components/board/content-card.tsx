@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
-import { CalendarDays, MessageCircle, PencilLine } from "lucide-react";
+import { CalendarDays, CheckCircle2, MessageCircle, Palette, PencilLine } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { DeadlineLabel } from "@/components/content/deadline-label";
@@ -10,7 +10,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { Campaign, CommentCounts, Content, Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const dateFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+});
 const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
   day: "numeric",
@@ -42,8 +45,11 @@ export function ContentCard({
   overlay?: boolean;
   dimmed?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: item.id, disabled: overlay });
-  const people = [item.author_id, item.assignee_id, item.reviewer_id]
+  const { attributes, listeners, setNodeRef } = useDraggable({
+    id: item.id,
+    disabled: overlay,
+  });
+  const people = [item.author_id, item.assignee_id, item.reviewer_id, item.designer_id]
     .filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i)
     .map((id) => teamById.get(id))
     .filter((p): p is Profile => !!p);
@@ -58,12 +64,30 @@ export function ContentCard({
       className={cn(
         "flex touch-none flex-col gap-3 rounded-xl border border-border bg-white p-4 text-navy-800 no-underline hover:border-input",
         overlay && "rotate-1 shadow-xl",
-        dimmed && "opacity-40"
+        dimmed && "opacity-40",
       )}
     >
       <span className="text-[15px] leading-snug font-bold">{item.title}</span>
       {campaign ? <CampaignTag campaign={campaign} className="self-start" /> : null}
       <DeadlineLabel item={item} />
+      {item.graphic_status ? (
+        <span
+          className={cn(
+            "flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-[13px] font-semibold",
+            item.graphic_status === "requested" ? "bg-cyan-300/20" : "bg-ice-100",
+          )}
+        >
+          {item.graphic_status === "requested" ? (
+            <Palette className="size-3.5 text-blue-600" strokeWidth={2.5} aria-hidden />
+          ) : (
+            <CheckCircle2 className="size-3.5 text-blue-600" strokeWidth={2.5} aria-hidden />
+          )}
+          {item.graphic_status === "requested" ? "Graphic requested" : "Graphic delivered"}
+          {item.designer_id && teamById.get(item.designer_id)
+            ? ` · ${teamById.get(item.designer_id)!.full_name?.split(" ")[0] ?? "Designer"}`
+            : ""}
+        </span>
+      ) : null}
       {counts?.openRequests ? (
         <span className="flex items-center gap-1.5 rounded-sm bg-orange-500/10 px-2 py-1.5 text-[13px] font-semibold">
           <PencilLine className="size-3.5 text-orange-500" strokeWidth={2.5} aria-hidden />
