@@ -9,25 +9,23 @@ import type { Campaign, CommentCounts, Content, ContentComment, PostIdea, Profil
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Verified locally from the session token, so no extra round trip to Supabase Auth.
+  const { data: auth } = await supabase.auth.getClaims();
+  const userId = auth?.claims?.sub;
+  if (!userId) redirect("/login");
 
-  // Removed from the team list since signing in: end the session.
-  const { data: allowed } = await supabase.rpc("am_i_allowed");
+  // The allowlist check and the profile load run together.
+  const [{ data: allowed }, { data }] = await Promise.all([
+    // Removed from the team list since signing in: end the session.
+    supabase.rpc("am_i_allowed"),
+    supabase.from("profiles").select("id, full_name, avatar_url, role, team_role").eq("id", userId).single(),
+  ]);
   if (!allowed) redirect("/auth/signout?error=removed");
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, avatar_url, role, team_role")
-    .eq("id", user.id)
-    .single();
 
   return (
     (data as Profile | null) ?? {
-      id: user.id,
-      full_name: user.email ?? null,
+      id: userId,
+      full_name: (auth?.claims?.email as string | undefined) ?? null,
       avatar_url: null,
       role: "member",
       team_role: "content_manager",
