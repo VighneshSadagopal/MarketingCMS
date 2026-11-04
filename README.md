@@ -50,7 +50,7 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
    Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`.
 2. **Supabase → Authentication → Sign In / Providers → Google**: turn it on and paste the client ID and secret.
 3. **Supabase → Authentication → Hooks → Before User Created**: choose Postgres and `public.hook_before_user_created`.
-4. **Supabase → Authentication → URL Configuration**: Site URL, plus redirect URLs for `http://localhost:3000/auth/callback` and your deployed `/auth/callback`.
+4. **Supabase → Authentication → URL Configuration**: Site URL must be `https://marketing-cms-beryl.vercel.app/` (keep it this way), plus redirect URLs for `http://localhost:3000/auth/callback` and your deployed `/auth/callback`.
 5. Optional: turn off the **Email** provider so nobody can create a password account.
 
 ## Project structure
