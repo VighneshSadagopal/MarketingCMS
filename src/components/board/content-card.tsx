@@ -7,7 +7,14 @@ import { CalendarDays, CheckCircle2, MessageCircle, Palette, PencilLine } from "
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { DeadlineLabel } from "@/components/content/deadline-label";
 import { UserAvatar } from "@/components/user-avatar";
-import type { Campaign, CommentCounts, Content, Profile } from "@/lib/types";
+import {
+  contentPath,
+  readingMinutes,
+  type Campaign,
+  type CommentCounts,
+  type Content,
+  type Profile,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
@@ -25,7 +32,7 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
 function dateLabel(c: Content) {
   if (!c.publish_at) return "No date";
   const d = new Date(c.publish_at);
-  if (c.status === "done") return `Posted ${dateFmt.format(d)}`;
+  if (c.status === "done") return `${c.kind === "blog" ? "Published" : "Posted"} ${dateFmt.format(d)}`;
   if (c.status === "ready_for_schedule") return dateTimeFmt.format(d);
   return `Due ${dateFmt.format(d)}`;
 }
@@ -57,7 +64,7 @@ export function ContentCard({
   return (
     <Link
       ref={setNodeRef}
-      href={`/content/${item.id}`}
+      href={contentPath(item)}
       {...listeners}
       {...attributes}
       aria-roledescription="Draggable content card"
@@ -68,6 +75,11 @@ export function ContentCard({
       )}
     >
       <span className="text-[15px] leading-snug font-bold">{item.title}</span>
+      {item.kind === "blog" ? (
+        <span className="text-[13px] font-semibold text-muted-foreground">
+          {readingMinutes(item.body).words ? `${readingMinutes(item.body).words} words` : "Idea, not written yet"}
+        </span>
+      ) : null}
       {campaign ? <CampaignTag campaign={campaign} className="self-start" /> : null}
       <DeadlineLabel item={item} />
       {item.graphic_status ? (

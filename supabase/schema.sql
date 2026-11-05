@@ -944,3 +944,20 @@ end;
 $$;
 
 grant execute on function public.create_post_idea(date, text, text[], uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Blogs: kept in the content table (so the board, review, comments, deadlines
+-- and graphic requests all work) but as their own kind, never in a campaign.
+-- ---------------------------------------------------------------------------
+alter table public.content add column if not exists kind text not null default 'post';
+alter table public.content add column if not exists body text;
+alter table public.content add column if not exists keywords text;
+
+alter table public.content drop constraint if exists content_kind_check;
+alter table public.content add constraint content_kind_check check (kind in ('post', 'blog'));
+
+alter table public.content drop constraint if exists content_blog_no_campaign;
+alter table public.content add constraint content_blog_no_campaign
+  check (kind = 'post' or (campaign_id is null and platforms = '{}'));
+
+create index if not exists content_kind_status_idx on public.content (kind, status, position);

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/", label: "My work" },
   { href: "/board", label: "Board" },
+  { href: "/blogs", label: "Blogs" },
   { href: "/calendar", label: "Calendar" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/guidelines", label: "Content guidelines" },
@@ -31,7 +32,9 @@ export function MainNav() {
             aria-current={active ? "page" : undefined}
             className={cn(
               "border-b-2 px-3 py-3 text-[15px] no-underline",
-              active ? "border-cyan-300 font-bold text-white" : "border-transparent font-semibold text-ice-100/70 hover:text-white"
+              active
+                ? "border-cyan-300 font-bold text-white"
+                : "border-transparent font-semibold text-ice-100/70 hover:text-white",
             )}
           >
             {l.label}

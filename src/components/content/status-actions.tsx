@@ -13,16 +13,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { friendlyDbError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ONLY_STATUSES, STATUSES, type ContentStatus } from "@/lib/types";
+import { OWNER_ONLY_STATUSES, STATUSES, contentPath, type ContentKind, type ContentStatus } from "@/lib/types";
 
 export function StatusActions({
   id,
+  kind = "post",
   status,
   isOwner,
   canDelete,
   openSuggest = false,
 }: {
   id: string;
+  kind?: ContentKind;
   status: ContentStatus;
   isOwner: boolean;
   canDelete: boolean;
@@ -63,7 +65,7 @@ export function StatusActions({
       setNote("");
       setSuggesting(false);
       toast.success("Change request sent.");
-      router.replace(`/content/${id}#activity`);
+      router.replace(`${contentPath({ id, kind })}#activity`);
       router.refresh();
     });
   }
@@ -72,8 +74,8 @@ export function StatusActions({
     startTransition(async () => {
       const res = await deleteContent(id);
       if (res.ok) {
-        toast.success("Content deleted.");
-        router.replace("/board");
+        toast.success(kind === "blog" ? "Blog deleted." : "Content deleted.");
+        router.replace(kind === "blog" ? "/blogs" : "/board");
       } else toast.error(res.error);
     });
   }
@@ -94,12 +96,17 @@ export function StatusActions({
           </SelectContent>
         </Select>
         <Button variant="outline" asChild>
-          <Link href={`/content/${id}/edit`}>
+          <Link href={`${contentPath({ id, kind })}/edit`}>
             <Pencil className="text-blue-600" strokeWidth={2.5} />
             Edit
           </Link>
         </Button>
-        <Button variant="outline" disabled={pending} onClick={() => setSuggesting((v) => !v)} aria-expanded={suggesting}>
+        <Button
+          variant="outline"
+          disabled={pending}
+          onClick={() => setSuggesting((v) => !v)}
+          aria-expanded={suggesting}
+        >
           <PencilLine className="text-orange-500" strokeWidth={2.5} />
           Suggest changes
         </Button>

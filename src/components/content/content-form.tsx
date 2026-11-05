@@ -21,10 +21,13 @@ import {
   X_CHAR_LIMIT,
   xCharCount,
   campaignDateRange,
+  contentPath,
   isDesigner,
   type Campaign,
   type GraphicStatus,
+  readingMinutes,
   type Content,
+  type ContentKind,
   type ContentStatus,
   type Platform,
   type Profile,
@@ -50,15 +53,19 @@ export function ContentForm({
   campaigns,
   initial,
   initialCampaignId,
+  kind = initial?.kind ?? "post",
 }: {
   team: Profile[];
   me: Profile;
   campaigns: Campaign[];
   initial?: Content;
   initialCampaignId?: string;
+  /** Blogs use the same form without campaigns, platforms or social copy. */
+  kind?: ContentKind;
 }) {
   const router = useRouter();
   const editing = !!initial;
+  const isBlog = kind === "blog";
   const initialWhen = toLocalParts(initial?.publish_at ?? null);
   const startCampaign =
     initial?.campaign_id ?? (campaigns.some((c) => c.id === initialCampaignId) ? initialCampaignId! : NONE);
@@ -67,6 +74,8 @@ export function ContentForm({
   const [campaignId, setCampaignId] = useState<string>(startCampaign);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [brief, setBrief] = useState(initial?.brief ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [keywords, setKeywords] = useState(initial?.keywords ?? "");
   const [startStatus, setStartStatus] = useState<ContentStatus>("todo");
   const [platforms, setPlatforms] = useState<Platform[]>(initial?.platforms ?? ["linkedin", "x", "instagram"]);
   const [copy, setCopy] = useState<Record<Platform, string>>({
@@ -150,13 +159,13 @@ export function ContentForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return toast.error("Add a title.");
-    if (platforms.length === 0) return toast.error("Pick at least one platform.");
-    for (const p of selected) {
+    if (!isBlog && platforms.length === 0) return toast.error("Pick at least one platform.");
+    for (const p of isBlog ? [] : selected) {
       if (!copy[p.id].trim()) return toast.error(`Write the ${p.label} copy.`);
     }
-    if (xOn && xOver) return toast.error(`X copy is over ${X_CHAR_LIMIT} characters.`);
+    if (!isBlog && xOn && xOver) return toast.error(`X copy is over ${X_CHAR_LIMIT} characters.`);
     if (graphicStatus === "requested" && designerId === NONE) return toast.error("Pick a designer for the graphic.");
-    if (campaign && date) {
+    if (!isBlog && campaign && date) {
       if ((campaign.start_date && date < campaign.start_date) || (campaign.end_date && date > campaign.end_date)) {
         return toast.error(`Pick a date within the campaign: ${campaignDateRange(campaign)}.`);
       }
@@ -186,17 +195,20 @@ export function ContentForm({
       const row = {
         title: title.trim(),
         brief: brief.trim() || null,
-        platforms,
-        copy_linkedin: platforms.includes("linkedin") ? copy.linkedin.trim() : null,
-        copy_x: platforms.includes("x") ? copy.x.trim() : null,
-        copy_instagram: platforms.includes("instagram") ? copy.instagram.trim() : null,
-        hashtags: hashtags.trim() || null,
+        kind,
+        platforms: isBlog ? [] : platforms,
+        copy_linkedin: !isBlog && platforms.includes("linkedin") ? copy.linkedin.trim() : null,
+        copy_x: !isBlog && platforms.includes("x") ? copy.x.trim() : null,
+        copy_instagram: !isBlog && platforms.includes("instagram") ? copy.instagram.trim() : null,
+        hashtags: isBlog ? null : hashtags.trim() || null,
+        body: isBlog ? body.trim() || null : null,
+        keywords: isBlog ? keywords.trim() || null : null,
         link_url: link.trim() || null,
         images: paths,
         assignee_id: assignee === NONE ? null : assignee,
         reviewer_id: reviewer === NONE ? null : reviewer,
         publish_at: publishAt,
-        campaign_id: campaignId === NONE ? null : campaignId,
+        campaign_id: isBlog || campaignId === NONE ? null : campaignId,
         graphic_status: graphicStatus === "requested" && markDelivered ? ("delivered" as const) : graphicStatus,
         designer_id: graphicStatus && designerId !== NONE ? designerId : null,
         graphic_note: graphicStatus ? graphicNote.trim() || null : null,
@@ -228,10 +240,10 @@ export function ContentForm({
           : row.graphic_status === "delivered" && initial?.graphic_status !== "delivered"
             ? "Saved and marked the graphic as delivered."
             : editing
-              ? "Content updated."
-              : "Content created.",
+              ? `${isBlog ? "Blog" : "Content"} updated.`
+              : `${isBlog ? "Blog" : "Content"} created.`,
       );
-      router.push(`/content/${id}`);
+      router.push(contentPath({ id: id!, kind }));
       router.refresh();
     } catch (err) {
       if (uploaded.length) await supabase.storage.from("content-images").remove(uploaded);
@@ -246,33 +258,39 @@ export function ContentForm({
         <Card>
           <fieldset className="flex flex-col gap-5">
             <legend className="mb-5 text-xl font-extrabold">Basics</legend>
-            <div className="flex flex-col gap-2">
-              <Label id="campaign-label">Campaign</Label>
-              <Select value={campaignId} onValueChange={pickCampaign}>
-                <SelectTrigger aria-labelledby="campaign-label" className="sm:w-96">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>No campaign</SelectItem>
-                  {campaigns.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="flex items-center gap-2">
-                        <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
-                        {c.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {campaign ? <span className="text-sm text-muted-foreground">{campaignDateRange(campaign)}</span> : null}
-            </div>
+            {!isBlog ? (
+              <div className="flex flex-col gap-2">
+                <Label id="campaign-label">Campaign</Label>
+                <Select value={campaignId} onValueChange={pickCampaign}>
+                  <SelectTrigger aria-labelledby="campaign-label" className="sm:w-96">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>No campaign</SelectItem>
+                    {campaigns.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
+                          {c.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {campaign ? <span className="text-sm text-muted-foreground">{campaignDateRange(campaign)}</span> : null}
+              </div>
+            ) : null}
             <div className="flex flex-col gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
                 required
                 maxLength={200}
-                placeholder="For example: AI Summit announcement"
+                placeholder={
+                  isBlog
+                    ? "For example: What we learned building Drupal CMS sites with Canvas"
+                    : "For example: AI Summit announcement"
+                }
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -292,12 +310,16 @@ export function ContentForm({
               </div>
             ) : null}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="brief">Brief</Label>
+              <Label htmlFor="brief">{isBlog ? "Summary" : "Brief"}</Label>
               <Textarea
                 id="brief"
                 rows={2}
                 className="min-h-16"
-                placeholder="What should this post achieve, and for whom?"
+                placeholder={
+                  isBlog
+                    ? "What's the blog about, who is it for, and what should readers take away?"
+                    : "What should this post achieve, and for whom?"
+                }
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
               />
@@ -305,91 +327,142 @@ export function ContentForm({
           </fieldset>
         </Card>
 
-        <Card>
-          <fieldset className="flex flex-col gap-5">
-            <legend className="mb-5 text-xl font-extrabold">Platforms</legend>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
-              {PLATFORMS.map((p) => {
-                const on = platforms.includes(p.id);
-                return (
-                  <label
-                    key={p.id}
-                    className={
-                      on
-                        ? "flex cursor-pointer items-center gap-3 rounded-md border-2 border-blue-600 bg-ice-100 px-4 py-3.5"
-                        : "flex cursor-pointer items-center gap-3 rounded-md border border-input bg-white px-4 py-3.5"
-                    }
-                  >
-                    <Checkbox checked={on} onCheckedChange={(v) => togglePlatform(p.id, v === true)} />
-                    <span className="text-[15px] font-bold">{p.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-        </Card>
-
-        <Card>
-          <fieldset className="flex flex-col gap-5">
-            <legend className="mb-5 text-xl font-extrabold">Post copy</legend>
-            {selected.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Pick a platform to write its copy.</p>
-            ) : null}
-            {selected.map((p) => (
-              <div key={p.id} className="flex flex-col gap-2">
+        {isBlog ? (
+          <Card>
+            <fieldset className="flex flex-col gap-5">
+              <legend className="mb-5 text-xl font-extrabold">Blog</legend>
+              <div className="flex flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-2">
-                  <Label htmlFor={`copy-${p.id}`}>{p.label} copy</Label>
-                  {p.id === "x" ? (
-                    <span
-                      aria-live="polite"
-                      className={
-                        xOver ? "text-sm font-bold text-navy-800" : "text-sm font-medium text-muted-foreground"
-                      }
-                    >
-                      {xChars} / {X_CHAR_LIMIT} characters
-                    </span>
-                  ) : null}
+                  <Label htmlFor="body">Blog text</Label>
+                  <span aria-live="polite" className="text-sm font-medium text-muted-foreground">
+                    {readingMinutes(body).words} words
+                    {readingMinutes(body).minutes ? ` · ${readingMinutes(body).minutes} min read` : ""}
+                  </span>
                 </div>
                 <Textarea
-                  id={`copy-${p.id}`}
-                  rows={4}
-                  aria-invalid={p.id === "x" && xOver ? true : undefined}
-                  placeholder={`Write the ${p.label} post`}
-                  value={copy[p.id]}
-                  onChange={(e) => setCopy((c) => ({ ...c, [p.id]: e.target.value }))}
+                  id="body"
+                  rows={18}
+                  className="min-h-80 leading-relaxed"
+                  placeholder="Write the blog here. Leave it empty for now if this is just an idea."
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
                 />
               </div>
-            ))}
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="hashtags">Hashtags</Label>
-                <Input
-                  id="hashtags"
-                  placeholder="#Drupal #DrupalAsia"
-                  value={hashtags}
-                  onChange={(e) => setHashtags(e.target.value)}
-                />
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="keywords">SEO keywords</Label>
+                  <Input
+                    id="keywords"
+                    placeholder="Drupal Canvas, headless Drupal"
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="link">Published link</Label>
+                  <Input
+                    id="link"
+                    type="url"
+                    placeholder="https://drupalasia.org/blog/…"
+                    value={link}
+                    onChange={(e) => setLink(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="link">Link</Label>
-                <Input
-                  id="link"
-                  type="url"
-                  placeholder="https://"
-                  value={link}
-                  onChange={(e) => setLink(e.target.value)}
-                />
-              </div>
-            </div>
-          </fieldset>
-        </Card>
+            </fieldset>
+          </Card>
+        ) : null}
+
+        {!isBlog ? (
+          <>
+            <Card>
+              <fieldset className="flex flex-col gap-5">
+                <legend className="mb-5 text-xl font-extrabold">Platforms</legend>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+                  {PLATFORMS.map((p) => {
+                    const on = platforms.includes(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={
+                          on
+                            ? "flex cursor-pointer items-center gap-3 rounded-md border-2 border-blue-600 bg-ice-100 px-4 py-3.5"
+                            : "flex cursor-pointer items-center gap-3 rounded-md border border-input bg-white px-4 py-3.5"
+                        }
+                      >
+                        <Checkbox checked={on} onCheckedChange={(v) => togglePlatform(p.id, v === true)} />
+                        <span className="text-[15px] font-bold">{p.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </Card>
+
+            <Card>
+              <fieldset className="flex flex-col gap-5">
+                <legend className="mb-5 text-xl font-extrabold">Post copy</legend>
+                {selected.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Pick a platform to write its copy.</p>
+                ) : null}
+                {selected.map((p) => (
+                  <div key={p.id} className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label htmlFor={`copy-${p.id}`}>{p.label} copy</Label>
+                      {p.id === "x" ? (
+                        <span
+                          aria-live="polite"
+                          className={
+                            xOver ? "text-sm font-bold text-navy-800" : "text-sm font-medium text-muted-foreground"
+                          }
+                        >
+                          {xChars} / {X_CHAR_LIMIT} characters
+                        </span>
+                      ) : null}
+                    </div>
+                    <Textarea
+                      id={`copy-${p.id}`}
+                      rows={4}
+                      aria-invalid={p.id === "x" && xOver ? true : undefined}
+                      placeholder={`Write the ${p.label} post`}
+                      value={copy[p.id]}
+                      onChange={(e) => setCopy((c) => ({ ...c, [p.id]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="hashtags">Hashtags</Label>
+                    <Input
+                      id="hashtags"
+                      placeholder="#Drupal #DrupalAsia"
+                      value={hashtags}
+                      onChange={(e) => setHashtags(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="link">Link</Label>
+                    <Input
+                      id="link"
+                      type="url"
+                      placeholder="https://"
+                      value={link}
+                      onChange={(e) => setLink(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+            </Card>
+          </>
+        ) : null}
 
         <Card>
           <fieldset className="flex flex-col gap-5">
-            <legend className="mb-5 text-xl font-extrabold">Images</legend>
+            <legend className="mb-5 text-xl font-extrabold">{isBlog ? "Cover and images" : "Images"}</legend>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Used on every selected platform. PNG, JPG or WebP, up to {MAX_IMAGES} images.
+                {isBlog ? "The first image is the cover." : "Used on every selected platform."} PNG, JPG or WebP, up to{" "}
+                {MAX_IMAGES} images.
               </p>
               <span aria-live="polite" className="text-sm font-bold">
                 {images.length} of {MAX_IMAGES}
@@ -633,54 +706,71 @@ export function ContentForm({
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="ghost" asChild>
-            <Link href={editing ? `/content/${initial?.id}` : "/board"}>Cancel</Link>
+            <Link href={editing ? contentPath(initial!) : isBlog ? "/blogs" : "/board"}>Cancel</Link>
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : editing ? "Save changes" : "Create content"}
+            {saving ? "Saving…" : editing ? "Save changes" : isBlog ? "Create blog" : "Create content"}
           </Button>
         </div>
       </form>
 
       <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4 lg:sticky lg:top-6">
-        <Card aria-labelledby="xlimit-h">
-          <h2 id="xlimit-h" className="text-xl font-extrabold">
-            X character limit
-          </h2>
-          {xOn ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between gap-2 text-sm">
-                <span className="font-bold">X copy</span>
-                <span className="font-semibold">
-                  {xChars} / {X_CHAR_LIMIT} characters
-                </span>
-              </div>
-              <div aria-hidden className="h-2 overflow-hidden rounded-full bg-ice-100">
-                <div
-                  className={xOver ? "h-full rounded-full bg-orange-500" : "h-full rounded-full bg-blue-600"}
-                  style={{
-                    width: `${Math.min(100, Math.round((xChars / X_CHAR_LIMIT) * 100))}%`,
-                  }}
-                />
-              </div>
-              {xOver ? (
-                <span className="flex items-center gap-1.5 text-[13px] font-bold">
-                  <AlertTriangle className="size-4 text-orange-500" strokeWidth={2.5} aria-hidden />
-                  Over by {xChars - X_CHAR_LIMIT} characters
-                </span>
-              ) : null}
-              <p className="text-[13px] text-muted-foreground">
-                Links in the copy, the Link field and hashtags don&apos;t count.
-              </p>
+        {isBlog ? (
+          <Card aria-labelledby="length-h">
+            <h2 id="length-h" className="text-xl font-extrabold">
+              Length
+            </h2>
+            <div className="flex items-baseline justify-between">
+              <span className="text-4xl font-extrabold tabular-nums">{readingMinutes(body).words}</span>
+              <span className="text-sm font-semibold text-muted-foreground">
+                words{readingMinutes(body).minutes ? ` · about ${readingMinutes(body).minutes} min read` : ""}
+              </span>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Select X to check the character limit.</p>
-          )}
-        </Card>
+            <p className="text-[13px] text-muted-foreground">
+              Blogs stay out of campaigns and the social calendar. They show on the board under Blogs.
+            </p>
+          </Card>
+        ) : (
+          <Card aria-labelledby="xlimit-h">
+            <h2 id="xlimit-h" className="text-xl font-extrabold">
+              X character limit
+            </h2>
+            {xOn ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between gap-2 text-sm">
+                  <span className="font-bold">X copy</span>
+                  <span className="font-semibold">
+                    {xChars} / {X_CHAR_LIMIT} characters
+                  </span>
+                </div>
+                <div aria-hidden className="h-2 overflow-hidden rounded-full bg-ice-100">
+                  <div
+                    className={xOver ? "h-full rounded-full bg-orange-500" : "h-full rounded-full bg-blue-600"}
+                    style={{
+                      width: `${Math.min(100, Math.round((xChars / X_CHAR_LIMIT) * 100))}%`,
+                    }}
+                  />
+                </div>
+                {xOver ? (
+                  <span className="flex items-center gap-1.5 text-[13px] font-bold">
+                    <AlertTriangle className="size-4 text-orange-500" strokeWidth={2.5} aria-hidden />
+                    Over by {xChars - X_CHAR_LIMIT} characters
+                  </span>
+                ) : null}
+                <p className="text-[13px] text-muted-foreground">
+                  Links in the copy, the Link field and hashtags don&apos;t count.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Select X to check the character limit.</p>
+            )}
+          </Card>
+        )}
         <section className="night flex flex-col gap-3 rounded-2xl bg-navy-900 p-6 text-white">
           <h2 className="text-base font-extrabold">What happens next</h2>
           <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm leading-relaxed text-ice-100/70">
             <li>The card appears on the board with your avatar.</li>
-            <li>Move it to Ready for review when the copy and images are in.</li>
+            <li>Move it to Ready for review when the {isBlog ? "text and cover are" : "copy and images are"} in.</li>
             <li>The owner approves it or suggests changes.</li>
           </ol>
         </section>

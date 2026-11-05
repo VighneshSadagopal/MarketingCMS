@@ -20,7 +20,11 @@ export async function updateContentStatus(id: string, status: string, position?:
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", user?.id ?? "").single();
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user?.id ?? "")
+      .single();
     if (me?.role !== "owner") return { ok: false, error: "Only the owner can move content there." };
   }
 
@@ -33,6 +37,8 @@ export async function updateContentStatus(id: string, status: string, position?:
   revalidatePath("/");
   revalidatePath("/board");
   revalidatePath(`/content/${id}`);
+  revalidatePath(`/blogs/${id}`);
+  revalidatePath("/blogs");
   revalidatePath("/calendar");
   return { ok: true };
 }
@@ -47,6 +53,7 @@ export async function deleteContent(id: string): Promise<Result> {
   }
   revalidatePath("/");
   revalidatePath("/board");
+  revalidatePath("/blogs");
   revalidatePath("/calendar");
   return { ok: true };
 }

@@ -32,6 +32,8 @@ import {
   type ContentStatus,
   type Profile,
   canCreateContent,
+  contentPath,
+  type ContentKind,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,9 @@ export function KanbanBoard({
   me,
   campaigns,
   counts,
+  kind = "post",
 }: {
+  kind?: ContentKind;
   initialItems: Content[];
   team: Profile[];
   me: Profile;
@@ -108,7 +112,7 @@ export function KanbanBoard({
 
     // Suggesting changes needs a note, so open the post with the note box ready.
     if (target === "changes_suggested") {
-      router.push(`/content/${id}?suggest=1`);
+      router.push(`${contentPath({ id, kind })}?suggest=1`);
       return;
     }
 
@@ -131,55 +135,59 @@ export function KanbanBoard({
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex h-11 items-center gap-2 rounded-sm border border-input bg-white px-3">
           <Search className="size-4 text-blue-600" strokeWidth={2.5} aria-hidden />
-          <span className="sr-only">Search content</span>
+          <span className="sr-only">{kind === "blog" ? "Search blogs" : "Search content"}</span>
           <Input
             type="search"
-            placeholder="Search content"
+            placeholder={kind === "blog" ? "Search blogs" : "Search content"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="h-9 w-52 border-0 px-0"
           />
         </label>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold" id="platform-filter">
-            Platform
-          </span>
-          <Select value={platform} onValueChange={setPlatform}>
-            <SelectTrigger className="w-44" aria-labelledby="platform-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All platforms</SelectItem>
-              {PLATFORMS.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold" id="campaign-filter">
-            Campaign
-          </span>
-          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-            <SelectTrigger className="w-56" aria-labelledby="campaign-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All campaigns</SelectItem>
-              <SelectItem value="none">No campaign</SelectItem>
-              {campaigns.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  <span className="flex items-center gap-2">
-                    <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
-                    {c.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {kind === "post" ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold" id="platform-filter">
+                Platform
+              </span>
+              <Select value={platform} onValueChange={setPlatform}>
+                <SelectTrigger className="w-44" aria-labelledby="platform-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All platforms</SelectItem>
+                  {PLATFORMS.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold" id="campaign-filter">
+                Campaign
+              </span>
+              <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                <SelectTrigger className="w-56" aria-labelledby="campaign-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All campaigns</SelectItem>
+                  <SelectItem value="none">No campaign</SelectItem>
+                  {campaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden className="size-2.5 rounded-full" style={{ background: c.color }} />
+                        {c.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        ) : null}
         <div role="group" aria-label="Filter by team member" className="flex items-center pl-2">
           {team.map((p) => (
             <button
@@ -210,6 +218,7 @@ export function KanbanBoard({
                 dot={s.dot}
                 locked={!isOwner && OWNER_ONLY_STATUSES.includes(s.id)}
                 canCreate={canCreateContent(me)}
+                newHref={kind === "blog" ? "/blogs/new" : "/content/new"}
                 items={visible.filter((c) => c.status === s.id).sort((a, b) => a.position - b.position)}
                 teamById={teamById}
                 campaignById={campaignById}
@@ -240,6 +249,7 @@ function Column({
   dot,
   locked,
   canCreate,
+  newHref,
   items,
   teamById,
   campaignById,
@@ -251,6 +261,7 @@ function Column({
   dot: string;
   locked: boolean;
   canCreate: boolean;
+  newHref: string;
   items: Content[];
   teamById: Map<string, Profile>;
   campaignById: Map<string, Campaign>;
@@ -282,8 +293,8 @@ function Column({
         </h2>
         {status === "todo" && canCreate ? (
           <Link
-            href="/content/new"
-            aria-label="Add content to Todo"
+            href={newHref}
+            aria-label={newHref === "/blogs/new" ? "Add a blog to Todo" : "Add content to Todo"}
             className="flex size-9 items-center justify-center rounded-md text-blue-600 hover:bg-white"
           >
             <Plus className="size-[18px]" strokeWidth={2.5} />

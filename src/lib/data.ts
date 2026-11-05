@@ -4,7 +4,16 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Campaign, CommentCounts, Content, ContentComment, PostIdea, Profile, TeamMember } from "@/lib/types";
+import type {
+  Campaign,
+  CommentCounts,
+  Content,
+  ContentKind,
+  ContentComment,
+  PostIdea,
+  Profile,
+  TeamMember,
+} from "@/lib/types";
 
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
@@ -42,9 +51,10 @@ export const getTeam = cache(async (): Promise<Profile[]> => {
   return (data as Profile[] | null) ?? [];
 });
 
-export async function getAllContent(): Promise<Content[]> {
+/** Every post, or every blog, for the board and the Blogs page. */
+export async function getAllContent(kind: ContentKind = "post"): Promise<Content[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("content").select("*").order("position");
+  const { data, error } = await supabase.from("content").select("*").eq("kind", kind).order("position");
   if (error) throw new Error(error.message);
   return (data as Content[]) ?? [];
 }
@@ -60,6 +70,8 @@ export async function getContentBetween(fromIso: string, toIso: string): Promise
   const { data, error } = await supabase
     .from("content")
     .select("*")
+    // The social calendar shows posts only; blogs aren't mixed in.
+    .eq("kind", "post")
     .gte("publish_at", fromIso)
     .lt("publish_at", toIso)
     .order("publish_at");

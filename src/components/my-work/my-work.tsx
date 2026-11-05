@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getDeadline } from "@/lib/deadlines";
 import {
   canCreateContent,
+  contentPath,
   roleLabel,
   statusMeta,
   type Campaign,
@@ -64,11 +65,14 @@ function TaskRow({ item, campaign, note }: { item: Content; campaign?: Campaign;
   return (
     <li>
       <Link
-        href={`/content/${item.id}`}
+        href={contentPath(item)}
         className="flex flex-col gap-2 rounded-xl border border-border bg-white p-4 text-navy-800 no-underline hover:border-input"
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <span className="font-bold">{item.title}</span>
+          <span className="flex items-center gap-2 font-bold">
+            {item.kind === "blog" ? <Badge>Blog</Badge> : null}
+            {item.title}
+          </span>
           <Badge variant="outline">
             <span
               aria-hidden
@@ -326,7 +330,7 @@ export function MyWork({
                 {doneRecent.map((c) => (
                   <li key={c.id}>
                     <Link
-                      href={`/content/${c.id}`}
+                      href={contentPath(c)}
                       className="flex items-start gap-2 rounded-md p-2 text-sm font-semibold text-navy-800 no-underline hover:bg-ice-100"
                     >
                       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-blue-600" strokeWidth={2.5} aria-hidden />

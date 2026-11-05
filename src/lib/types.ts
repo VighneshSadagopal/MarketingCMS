@@ -80,8 +80,23 @@ export function isDesigner(p: Pick<Profile, "role" | "team_role">) {
 
 export type GraphicStatus = "requested" | "delivered";
 
+/** Social posts and blogs share one table and one workflow, but are kept apart everywhere in the app. */
+export type ContentKind = "post" | "blog";
+
+/** Where a post or blog lives in the app. */
+export function contentPath(item: { id: string; kind?: ContentKind | null }) {
+  return item.kind === "blog" ? `/blogs/${item.id}` : `/content/${item.id}`;
+}
+
+/** Rough reading time for a blog body (200 words a minute). */
+export function readingMinutes(text: string | null | undefined) {
+  const words = (text ?? "").trim().split(/\s+/).filter(Boolean).length;
+  return { words, minutes: words ? Math.max(1, Math.round(words / 200)) : 0 };
+}
+
 export type Content = {
   id: string;
+  kind: ContentKind;
   title: string;
   brief: string | null;
   status: ContentStatus;
@@ -91,6 +106,9 @@ export type Content = {
   copy_instagram: string | null;
   hashtags: string | null;
   link_url: string | null;
+  /** Blogs only: the article text and SEO keywords. */
+  body: string | null;
+  keywords: string | null;
   images: string[];
   author_id: string | null;
   assignee_id: string | null;
