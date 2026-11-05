@@ -25,8 +25,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { friendlyDbError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/client";
 import {
+  campaignDateRange,
   canCreateContent,
   PLATFORMS,
   platformLabel,
@@ -73,11 +75,13 @@ function ChipBody({ chip, dragging }: { chip: Chip; dragging?: boolean }) {
   );
 }
 
-/** Idea chips can be dragged onto another day. */
-function IdeaChip({ chip }: { chip: Chip }) {
+/** Post and idea chips can be dragged onto another day. */
+function DraggableChip({ chip, disabled }: { chip: Chip; disabled?: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: chip.key,
+    id: `${chip.kind}:${chip.key}`,
+    disabled,
   });
+  if (disabled) return <ChipBody chip={chip} />;
   return (
     <span
       ref={setNodeRef}
@@ -145,6 +149,8 @@ export function CalendarView({
   const [pending, startTransition] = useTransition();
   // Dates of ideas moved here but not yet confirmed by a refresh (so the chip moves at once).
   const [movedTo, setMovedTo] = useState<Record<string, string>>({});
+  // Same for planned posts: post id → new day.
+  const [postMovedTo, setPostMovedTo] = useState<Record<string, string>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [moveDates, setMoveDates] = useState<Record<string, string>>({});
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -171,12 +177,12 @@ export function CalendarView({
     const map = new Map<string, Content[]>();
     for (const p of posts) {
       if (!p.publish_at || movedCards.has(p.id)) continue;
-      const key = toIsoDate(new Date(p.publish_at));
+      const key = postMovedTo[p.id] ?? toIsoDate(new Date(p.publish_at));
       if (ideaDateByContent.get(p.id) === key) continue;
       map.set(key, [...(map.get(key) ?? []), p]);
     }
     return map;
-  }, [posts, ideas, movedTo]);
+  }, [posts, ideas, movedTo, postMovedTo]);
 
   /** Campaigns with a post or idea due on the given day (not every day in the campaign's range). */
   const campaignsOn = (iso: string) => {
@@ -275,17 +281,68 @@ export function CalendarView({
     });
   }
 
+  /** Move a planned post to another day, keeping its time. Its idea (if any) follows (database trigger). */
+  function movePost(post: Content, newDate: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || !post.publish_at) return;
+    const old = new Date(post.publish_at);
+    if (toIsoDate(old) === newDate) return;
+    if (post.status === "done") {
+      toast.error("This post is already posted, so its date can't change.");
+      return;
+    }
+    const campaign = post.campaign_id ? campaignById.get(post.campaign_id) : undefined;
+    if (
+      campaign &&
+      ((campaign.start_date && newDate < campaign.start_date) || (campaign.end_date && newDate > campaign.end_date))
+    ) {
+      toast.error(`${campaign.name} runs ${campaignDateRange(campaign)}. Pick a day in that range.`);
+      return;
+    }
+    const [y, m, d] = newDate.split("-").map(Number);
+    const next = new Date(y, m - 1, d, old.getHours(), old.getMinutes(), old.getSeconds());
+    setPostMovedTo((cur) => ({ ...cur, [post.id]: newDate }));
+    startTransition(async () => {
+      const { error } = await createClient()
+        .from("content")
+        .update({ publish_at: next.toISOString() })
+        .eq("id", post.id);
+      if (error) {
+        setPostMovedTo((cur) => {
+          const copy = { ...cur };
+          delete copy[post.id];
+          return copy;
+        });
+        toast.error(friendlyDbError(error.message));
+        return;
+      }
+      const label = next.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+      const time = next.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      toast.success(`"${post.title}" moved to ${label}, ${time}.`);
+      router.refresh();
+    });
+  }
+
   function onDragStart(e: DragStartEvent) {
     setDragId(String(e.active.id));
   }
 
   function onDragEnd(e: DragEndEvent) {
     setDragId(null);
-    const idea = ideas.find((i) => i.id === e.active.id);
-    if (idea && e.over) moveIdea(idea, String(e.over.id));
+    if (!e.over) return;
+    const [kind, id] = String(e.active.id).split(":");
+    const day = String(e.over.id);
+    if (kind === "idea") {
+      const idea = ideas.find((i) => i.id === id);
+      if (idea) moveIdea(idea, day);
+    } else {
+      const post = postsById.get(id);
+      if (post) movePost(post, day);
+    }
   }
 
-  const dragIdea = dragId ? ideas.find((i) => i.id === dragId) : undefined;
+  const [dragKind, dragKey] = dragId ? dragId.split(":") : [];
+  const dragIdea = dragKind === "idea" ? ideas.find((i) => i.id === dragKey) : undefined;
+  const dragPost = dragKind === "post" ? postsById.get(dragKey) : undefined;
 
   return (
     <>
@@ -402,15 +459,13 @@ export function CalendarView({
                           ))}
                         </span>
                       ) : null}
-                      {items
-                        .slice(0, MAX_CHIPS)
-                        .map((it) =>
-                          it.kind === "idea" ? (
-                            <IdeaChip key={it.key} chip={it} />
-                          ) : (
-                            <ChipBody key={it.key} chip={it} />
-                          ),
-                        )}
+                      {items.slice(0, MAX_CHIPS).map((it) => (
+                        <DraggableChip
+                          key={it.key}
+                          chip={it}
+                          disabled={it.kind === "post" && postsById.get(it.key)?.status === "done"}
+                        />
+                      ))}
                       {items.length > MAX_CHIPS ? (
                         <span className="px-1.5 text-xs font-bold">+{items.length - MAX_CHIPS} more</span>
                       ) : null}
@@ -419,16 +474,25 @@ export function CalendarView({
                 })}
               </div>
               <DragOverlay dropAnimation={null}>
-                {dragIdea ? (
+                {dragIdea || dragPost ? (
                   <span className="flex w-40 cursor-grabbing">
                     <ChipBody
                       dragging
-                      chip={{
-                        key: dragIdea.id,
-                        text: dragIdea.text,
-                        kind: "idea",
-                        color: dragIdea.campaign_id ? campaignById.get(dragIdea.campaign_id)?.color : undefined,
-                      }}
+                      chip={
+                        dragIdea
+                          ? {
+                              key: dragIdea.id,
+                              text: dragIdea.text,
+                              kind: "idea",
+                              color: dragIdea.campaign_id ? campaignById.get(dragIdea.campaign_id)?.color : undefined,
+                            }
+                          : {
+                              key: dragPost!.id,
+                              text: dragPost!.title,
+                              kind: "post",
+                              color: dragPost!.campaign_id ? campaignById.get(dragPost!.campaign_id)?.color : undefined,
+                            }
+                      }
                     />
                   </span>
                 ) : null}
@@ -457,20 +521,54 @@ export function CalendarView({
           {selPosts.length ? (
             <div className="flex flex-col gap-2">
               <h3 className="text-[15px] font-extrabold">Planned posts</h3>
+              <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                <GripVertical aria-hidden className="size-3.5" />
+                Drag a post to another day, or pick a new date below. Its time stays the same.
+              </p>
               {selPosts.map((p) => (
-                <Link
-                  key={p.id}
-                  href={`/content/${p.id}`}
-                  className="flex flex-col gap-1 rounded-md bg-navy-800 p-3 text-white no-underline"
-                >
-                  <span className="text-sm font-bold">{p.title}</span>
-                  <span className="text-[13px] text-ice-100/70">
-                    {statusMeta(p.status).label} · {p.platforms.map(platformLabel).join(", ")}
-                    {p.campaign_id && campaignById.get(p.campaign_id)
-                      ? ` · ${campaignById.get(p.campaign_id)!.name}`
-                      : ""}
-                  </span>
-                </Link>
+                <div key={p.id} className="flex flex-col gap-2">
+                  <Link
+                    href={`/content/${p.id}`}
+                    className="flex flex-col gap-1 rounded-md bg-navy-800 p-3 text-white no-underline"
+                  >
+                    <span className="text-sm font-bold">{p.title}</span>
+                    <span className="text-[13px] text-ice-100/70">
+                      {statusMeta(p.status).label} · {p.platforms.map(platformLabel).join(", ")}
+                      {p.campaign_id && campaignById.get(p.campaign_id)
+                        ? ` · ${campaignById.get(p.campaign_id)!.name}`
+                        : ""}
+                    </span>
+                  </Link>
+                  {p.status !== "done" ? (
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        movePost(p, moveDates[p.id] ?? "");
+                      }}
+                    >
+                      <Label htmlFor={`move-post-${p.id}`} className="sr-only">
+                        Move {p.title} to
+                      </Label>
+                      <Input
+                        id={`move-post-${p.id}`}
+                        type="date"
+                        className="h-9 min-w-0 flex-1"
+                        value={moveDates[p.id] ?? selected}
+                        onChange={(e) => setMoveDates((m) => ({ ...m, [p.id]: e.target.value }))}
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        disabled={pending || !moveDates[p.id] || moveDates[p.id] === selected}
+                      >
+                        <CalendarClock strokeWidth={2.5} />
+                        Move
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
               ))}
             </div>
           ) : null}
