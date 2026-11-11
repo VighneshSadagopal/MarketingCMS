@@ -201,12 +201,18 @@ export function campaignDateRange(c: Pick<Campaign, "start_date" | "end_date">) 
 
 export type CommentKind = "comment" | "change_request" | "status";
 
+export const MAX_COMMENT_IMAGES = 4;
+/** 10 MB, the content-images bucket limit. */
+export const MAX_COMMENT_IMAGE_BYTES = 10 * 1024 * 1024;
+
 export type ContentComment = {
   id: string;
   content_id: string;
   author_id: string | null;
   kind: CommentKind;
   body: string;
+  /** Storage paths in the content-images bucket (up to MAX_COMMENT_IMAGES). */
+  images: string[];
   resolved: boolean;
   resolved_by: string | null;
   resolved_at: string | null;

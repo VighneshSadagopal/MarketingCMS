@@ -1003,3 +1003,17 @@ begin
   return new;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Comment images: up to 4 per comment (stored in content-images under comments/).
+-- A comment can be images only, so the text may be empty when images are attached.
+-- ---------------------------------------------------------------------------
+alter table public.content_comments add column if not exists images text[] not null default '{}';
+
+alter table public.content_comments drop constraint if exists content_comments_body_check;
+alter table public.content_comments drop constraint if exists content_comments_body_or_images;
+alter table public.content_comments add constraint content_comments_body_or_images check (
+  char_length(body) <= 2000
+  and cardinality(images) <= 4
+  and (char_length(btrim(body)) >= 1 or cardinality(images) >= 1)
+);
