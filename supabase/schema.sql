@@ -961,3 +961,45 @@ alter table public.content add constraint content_blog_no_campaign
   check (kind = 'post' or (campaign_id is null and platforms = '{}'));
 
 create index if not exists content_kind_status_idx on public.content (kind, status, position);
+
+-- ---------------------------------------------------------------------------
+-- Content approver: same as a content manager, but can also move cards into
+-- Ready for schedule and Done / Posted (like the owner).
+-- Run the ALTER TYPE on its own first: a new enum value must be committed before use.
+-- ---------------------------------------------------------------------------
+alter type public.team_role add value if not exists 'content_approver';
+
+create or replace function public.can_approve()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and (role = 'owner' or team_role::text = 'content_approver')
+  );
+end;
+$$;
+
+grant execute on function public.can_approve() to authenticated;
+
+create or replace function public.content_before_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  if new.status is distinct from old.status
+     and new.status in ('ready_for_schedule', 'done')
+     and not public.can_approve() then
+    raise exception 'Only the owner or a content approver can move content to %', new.status
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;

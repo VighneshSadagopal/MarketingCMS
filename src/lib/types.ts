@@ -9,7 +9,7 @@ export const STATUSES = [
 
 export type ContentStatus = (typeof STATUSES)[number]["id"];
 
-/** Statuses only the owner may move content into. */
+/** Statuses only the owner or a content approver may move content into. */
 export const OWNER_ONLY_STATUSES: ContentStatus[] = ["ready_for_schedule", "done"];
 
 export function statusMeta(id: ContentStatus) {
@@ -47,6 +47,7 @@ export type Role = "owner" | "member";
 
 export const TEAM_ROLES = [
   { id: "content_manager", label: "Content manager" },
+  { id: "content_approver", label: "Content approver" },
   { id: "designer", label: "Designer" },
 ] as const;
 
@@ -72,6 +73,11 @@ export function roleLabel(p: Pick<Profile, "role" | "team_role">) {
 /** Designers don't create posts or ideas (enforced in the database too). */
 export function canCreateContent(p: Pick<Profile, "role" | "team_role">) {
   return p.role === "owner" || p.team_role !== "designer";
+}
+
+/** The owner and content approvers can move cards into Ready for schedule and Done / Posted. */
+export function canApprove(p: Pick<Profile, "role" | "team_role">) {
+  return p.role === "owner" || p.team_role === "content_approver";
 }
 
 export function isDesigner(p: Pick<Profile, "role" | "team_role">) {

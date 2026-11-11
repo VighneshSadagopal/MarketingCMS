@@ -19,14 +19,15 @@ export function StatusActions({
   id,
   kind = "post",
   status,
-  isOwner,
+  canApprove,
   canDelete,
   openSuggest = false,
 }: {
   id: string;
   kind?: ContentKind;
   status: ContentStatus;
-  isOwner: boolean;
+  /** Owner or content approver: may move into Ready for schedule and Done / Posted. */
+  canApprove: boolean;
   canDelete: boolean;
   /** Open the note box straight away (a card was dropped on Changes suggested). */
   openSuggest?: boolean;
@@ -89,7 +90,7 @@ export function StatusActions({
           </SelectTrigger>
           <SelectContent>
             {STATUSES.map((s) => (
-              <SelectItem key={s.id} value={s.id} disabled={!isOwner && OWNER_ONLY_STATUSES.includes(s.id)}>
+              <SelectItem key={s.id} value={s.id} disabled={!canApprove && OWNER_ONLY_STATUSES.includes(s.id)}>
                 {s.label}
               </SelectItem>
             ))}
@@ -110,7 +111,7 @@ export function StatusActions({
           <PencilLine className="text-orange-500" strokeWidth={2.5} />
           Suggest changes
         </Button>
-        {isOwner && status !== "ready_for_schedule" && status !== "done" ? (
+        {canApprove && status !== "ready_for_schedule" && status !== "done" ? (
           <Button disabled={pending} onClick={() => move("ready_for_schedule")}>
             <Check strokeWidth={2.5} />
             Approve for schedule

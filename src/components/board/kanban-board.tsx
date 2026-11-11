@@ -31,6 +31,7 @@ import {
   type Content,
   type ContentStatus,
   type Profile,
+  canApprove,
   canCreateContent,
   contentPath,
   type ContentKind,
@@ -92,7 +93,7 @@ export function KanbanBoard({
     return true;
   });
 
-  const isOwner = me.role === "owner";
+  const mayApprove = canApprove(me);
 
   function onDragStart(e: DragStartEvent) {
     setActiveId(String(e.active.id));
@@ -105,8 +106,8 @@ export function KanbanBoard({
     const item = items.find((c) => c.id === id);
     if (!item || !target || item.status === target) return;
 
-    if (!isOwner && OWNER_ONLY_STATUSES.includes(target)) {
-      toast.error("Only the owner can move content to that column.");
+    if (!mayApprove && OWNER_ONLY_STATUSES.includes(target)) {
+      toast.error("Only the owner or a content approver can move content to that column.");
       return;
     }
 
@@ -216,7 +217,7 @@ export function KanbanBoard({
                 status={s.id}
                 label={s.label}
                 dot={s.dot}
-                locked={!isOwner && OWNER_ONLY_STATUSES.includes(s.id)}
+                locked={!mayApprove && OWNER_ONLY_STATUSES.includes(s.id)}
                 canCreate={canCreateContent(me)}
                 newHref={kind === "blog" ? "/blogs/new" : "/content/new"}
                 items={visible.filter((c) => c.status === s.id).sort((a, b) => a.position - b.position)}
@@ -301,7 +302,9 @@ function Column({
           </Link>
         ) : null}
       </div>
-      {locked ? <p className="px-1 text-xs font-semibold text-muted-foreground">Owner moves cards here</p> : null}
+      {locked ? (
+        <p className="px-1 text-xs font-semibold text-muted-foreground">Owner or approver moves cards here</p>
+      ) : null}
       {items.map((c) => (
         <ContentCard
           key={c.id}

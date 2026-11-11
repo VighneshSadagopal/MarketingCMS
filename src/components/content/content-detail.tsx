@@ -13,7 +13,15 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { getCampaigns, getComments, getContent, getCurrentProfile, getTeam } from "@/lib/data";
 import { publicImageUrl } from "@/lib/supabase/client";
-import { contentPath, platformLabel, readingMinutes, statusMeta, type ContentKind, type Profile } from "@/lib/types";
+import {
+  canApprove,
+  contentPath,
+  platformLabel,
+  readingMinutes,
+  statusMeta,
+  type ContentKind,
+  type Profile,
+} from "@/lib/types";
 
 const when = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -146,7 +154,7 @@ export async function ContentDetail({ id, suggest, kind }: { id: string; suggest
           kind={item.kind}
           status={item.status}
           openSuggest={suggest === "1"}
-          isOwner={isOwner}
+          canApprove={canApprove(me)}
           canDelete={isOwner || item.author_id === me.id}
         />
       </div>

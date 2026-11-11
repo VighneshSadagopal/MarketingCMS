@@ -771,7 +771,7 @@ export function ContentForm({
           <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm leading-relaxed text-ice-100/70">
             <li>The card appears on the board with your avatar.</li>
             <li>Move it to Ready for review when the {isBlog ? "text and cover are" : "copy and images are"} in.</li>
-            <li>The owner approves it or suggests changes.</li>
+            <li>The owner or a content approver approves it or suggests changes.</li>
           </ol>
         </section>
       </aside>

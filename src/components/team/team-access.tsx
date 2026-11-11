@@ -17,6 +17,7 @@ import { TEAM_ROLES, teamRoleLabel, type TeamMember, type TeamRole } from "@/lib
 
 const ROLE_HINT: Record<TeamRole, string> = {
   content_manager: "Creates posts and ideas, and can request graphics from designers.",
+  content_approver: "Everything a content manager can do, plus moving cards into Ready for schedule and Done / Posted.",
   designer: "Works on graphics they're asked for. Can't create posts or ideas.",
 };
 
@@ -197,9 +198,9 @@ export function TeamAccess({ members }: { members: TeamMember[] }) {
           ))}
         </ul>
         <p className="text-sm text-muted-foreground">
-          Content managers create posts and ideas and can request graphics. Designers make the graphics they&apos;re
-          asked for and can&apos;t create posts. Removing someone deletes their login straight away; their posts, ideas
-          and comments stay.
+          Content managers create posts and ideas and can request graphics. Content approvers can also move cards into
+          Ready for schedule and Done / Posted. Designers make the graphics they&apos;re asked for and can&apos;t create
+          posts. Removing someone deletes their login straight away; their posts, ideas and comments stay.
         </p>
       </section>
     </div>

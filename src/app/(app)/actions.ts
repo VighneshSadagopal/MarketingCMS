@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { friendlyDbError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/server";
-import { OWNER_ONLY_STATUSES, STATUSES, type ContentStatus } from "@/lib/types";
+import { OWNER_ONLY_STATUSES, STATUSES, canApprove, type ContentStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -22,10 +22,11 @@ export async function updateContentStatus(id: string, status: string, position?:
     } = await supabase.auth.getUser();
     const { data: me } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, team_role")
       .eq("id", user?.id ?? "")
       .single();
-    if (me?.role !== "owner") return { ok: false, error: "Only the owner can move content there." };
+    if (!me || !canApprove(me))
+      return { ok: false, error: "Only the owner or a content approver can move content there." };
   }
 
   const patch: { status: ContentStatus; position?: number } = { status };
