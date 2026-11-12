@@ -1,8 +1,11 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
+import { createClient as createTokenClient } from "@supabase/supabase-js";
 
+import { SHARED_CACHE, type SharedTag } from "@/lib/shared-cache";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Campaign,
@@ -14,6 +17,37 @@ import type {
   Profile,
   TeamMember,
 } from "@/lib/types";
+
+/** The signed-in user's access token, read from the session cookie (no network call). */
+const accessToken = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+});
+
+/**
+ * Data every signed-in person sees the same way (team, campaigns, comment counts) is cached on the
+ * server and shared across requests, instead of being fetched from Supabase on every page.
+ * The cache can't read cookies, so the query runs with the current person's access token
+ * (row level security still applies), and the token is kept out of the cache key.
+ * Edits call refreshShared() so changes show straight away; the time limit is a safety net.
+ */
+async function sharedQuery<T>(tag: SharedTag, run: (db: ReturnType<typeof createTokenClient>) => Promise<T>) {
+  const token = await accessToken();
+  if (!token) redirect("/login");
+  const cached = unstable_cache(
+    () =>
+      run(
+        createTokenClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        }),
+      ),
+    ["shared", tag],
+    { tags: [tag], revalidate: SHARED_CACHE[tag] },
+  );
+  return cached();
+}
 
 /** The signed-in user's profile. Redirects to /login when signed out. */
 export const getCurrentProfile = cache(async (): Promise<Profile> => {
@@ -42,14 +76,16 @@ export const getCurrentProfile = cache(async (): Promise<Profile> => {
   );
 });
 
-export const getTeam = cache(async (): Promise<Profile[]> => {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, avatar_url, role, team_role")
-    .order("full_name");
-  return (data as Profile[] | null) ?? [];
-});
+export const getTeam = cache((): Promise<Profile[]> =>
+  sharedQuery("team", async (db) => {
+    const { data, error } = await db
+      .from("profiles")
+      .select("id, full_name, avatar_url, role, team_role")
+      .order("full_name");
+    if (error) throw new Error(error.message);
+    return (data as Profile[] | null) ?? [];
+  }),
+);
 
 /** Every post, or every blog, for the board and the Blogs page. */
 export async function getAllContent(kind: ContentKind = "post"): Promise<Content[]> {
@@ -91,15 +127,16 @@ export async function getIdeasBetween(fromDate: string, toDate: string): Promise
   return (data as PostIdea[]) ?? [];
 }
 
-export const getCampaigns = cache(async (): Promise<Campaign[]> => {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("campaigns")
-    .select("*")
-    .order("start_date", { ascending: true, nullsFirst: false });
-  if (error) throw new Error(error.message);
-  return (data as Campaign[]) ?? [];
-});
+export const getCampaigns = cache((): Promise<Campaign[]> =>
+  sharedQuery("campaigns", async (db) => {
+    const { data, error } = await db
+      .from("campaigns")
+      .select("*")
+      .order("start_date", { ascending: true, nullsFirst: false });
+    if (error) throw new Error(error.message);
+    return (data as Campaign[]) ?? [];
+  }),
+);
 
 export async function getCampaign(id: string): Promise<Campaign | null> {
   const supabase = await createClient();
@@ -130,21 +167,22 @@ export async function getComments(contentId: string): Promise<ContentComment[]> 
 }
 
 /** Comment and open change-request counts for every card, keyed by content id. */
-export async function getCommentCounts(): Promise<Record<string, CommentCounts>> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_comments")
-    .select("content_id, kind, resolved")
-    .in("kind", ["comment", "change_request"]);
-  if (error) throw new Error(error.message);
-  const counts: Record<string, CommentCounts> = {};
-  for (const r of (data ?? []) as Pick<ContentComment, "content_id" | "kind" | "resolved">[]) {
-    const c = (counts[r.content_id] ??= { comments: 0, openRequests: 0 });
-    c.comments += 1;
-    if (r.kind === "change_request" && !r.resolved) c.openRequests += 1;
-  }
-  return counts;
-}
+export const getCommentCounts = cache((): Promise<Record<string, CommentCounts>> =>
+  sharedQuery("comment-counts", async (db) => {
+    const { data, error } = await db
+      .from("content_comments")
+      .select("content_id, kind, resolved")
+      .in("kind", ["comment", "change_request"]);
+    if (error) throw new Error(error.message);
+    const counts: Record<string, CommentCounts> = {};
+    for (const r of (data ?? []) as Pick<ContentComment, "content_id" | "kind" | "resolved">[]) {
+      const c = (counts[r.content_id] ??= { comments: 0, openRequests: 0 });
+      c.comments += 1;
+      if (r.kind === "change_request" && !r.resolved) c.openRequests += 1;
+    }
+    return counts;
+  }),
+);
 
 /** Everyone on the allowlist, for the owner's Team access page. */
 export async function getTeamMembers(): Promise<TeamMember[]> {

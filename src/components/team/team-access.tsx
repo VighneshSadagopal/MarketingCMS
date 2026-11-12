@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UserPlus, UserX } from "lucide-react";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function TeamAccess({ members }: { members: TeamMember[] }) {
         return;
       }
       setEmail("");
+      await refreshShared(["team"]);
       toast.success(`${value} can now sign in with Google as a ${teamRoleLabel(newRole).toLowerCase()}.`);
       router.refresh();
     });
@@ -64,6 +66,7 @@ export function TeamAccess({ members }: { members: TeamMember[] }) {
         toast.error(error.message);
         return;
       }
+      await refreshShared(["team"]);
       toast.success(`${value} is now a ${teamRoleLabel(role).toLowerCase()}.`);
       router.refresh();
     });
@@ -79,6 +82,7 @@ export function TeamAccess({ members }: { members: TeamMember[] }) {
         return;
       }
       setConfirming(null);
+      await refreshShared(["team"]);
       toast.success(`${value} was removed.`);
       router.refresh();
     });

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,6 +31,7 @@ export function CampaignActions({
         toast.error(error.message);
         return;
       }
+      await refreshShared(["campaigns"]);
       toast.success("Campaign deleted. Its posts are still on the board.");
       router.replace("/campaigns");
       router.refresh();

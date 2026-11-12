@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
     setBusy(false);
     if (upErr) return toast.error(upErr.message);
     setAvatarUrl(url);
+    await refreshShared(["team"]);
     toast.success("Avatar updated.");
     router.refresh();
   }
@@ -48,6 +50,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
       .eq("id", profile.id);
     setBusy(false);
     if (error) return toast.error(error.message);
+    await refreshShared(["team"]);
     toast.success("Name saved.");
     router.refresh();
   }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Check, ImagePlus, PencilLine, RotateCcw, Trash2, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { LinkifiedText } from "@/components/linkified-text";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -147,6 +148,7 @@ export function ActivityFeed({
       attachments.forEach((a) => URL.revokeObjectURL(a.preview));
       setAttachments([]);
       setDraft("");
+      await refreshShared(["comment-counts"]);
       router.refresh();
     });
   }
@@ -161,8 +163,12 @@ export function ActivityFeed({
           resolved_at: resolved ? new Date().toISOString() : null,
         })
         .eq("id", c.id);
-      if (error) toast.error(error.message);
-      else router.refresh();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await refreshShared(["comment-counts"]);
+      router.refresh();
     });
   }
 
@@ -176,6 +182,7 @@ export function ActivityFeed({
       }
       // The comment's images go with it.
       if (c.images?.length) await supabase.storage.from("content-images").remove(c.images);
+      await refreshShared(["comment-counts"]);
       router.refresh();
     });
   }

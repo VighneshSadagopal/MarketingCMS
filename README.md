@@ -21,6 +21,11 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 - **Graphic requests**: in the content form, a content manager (or the owner) presses **Request graphic**, picks a designer and describes the graphic. The designer is added to the post (avatar on the board card, a "Graphic requested" label, and a "Graphics requested" list on their My work page). They upload the graphic in the Images section and mark it delivered, either from the content page or with a checkbox in the form. Requests, deliveries and cancellations show in the post's activity.
 - **Google sign-in with a team allowlist**: people sign in with "Continue with Google". Only emails the owner adds under **Team access** (account menu → Team access) can sign in; a Supabase "Before user created" hook refuses everyone else, and removing someone deletes their login (their posts stay). Names and avatars come from Google. The owner is set in `supabase/schema.sql` (`vighneshp65@gmail.com`).
 
+## Performance
+
+- Vercel functions run in Tokyo (`hnd1`, see `vercel.json`), next to the Supabase project.
+- Team members, campaigns and comment counts are cached on the server and shared across requests (`src/lib/data.ts`, `sharedQuery`). Edits in the app call `refreshShared()` (`src/app/(app)/cache-actions.ts`) so changes show straight away; otherwise the caches refresh after 10 minutes (team, campaigns) or 2 minutes (comment counts). Changes made directly in Supabase show after that time.
+
 ## Setup
 
 1. Install dependencies:

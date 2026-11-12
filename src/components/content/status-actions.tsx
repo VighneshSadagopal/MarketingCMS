@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, PencilLine, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { deleteContent, updateContentStatus } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -65,6 +66,7 @@ export function StatusActions({
       }
       setNote("");
       setSuggesting(false);
+      await refreshShared(["comment-counts"]);
       toast.success("Change request sent.");
       router.replace(`${contentPath({ id, kind })}#activity`);
       router.refresh();

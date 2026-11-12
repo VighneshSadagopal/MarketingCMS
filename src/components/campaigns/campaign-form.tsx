@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 
+import { refreshShared } from "@/app/(app)/cache-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,13 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
-import {
-  CAMPAIGN_COLORS,
-  CAMPAIGN_STATUSES,
-  type Campaign,
-  type CampaignStatus,
-  type Profile,
-} from "@/lib/types";
+import { CAMPAIGN_COLORS, CAMPAIGN_STATUSES, type Campaign, type CampaignStatus, type Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign }) {
@@ -55,12 +50,17 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
 
     const res = editing
       ? await supabase.from("campaigns").update(row).eq("id", initial!.id).select("id").single()
-      : await supabase.from("campaigns").insert({ ...row, created_by: me.id }).select("id").single();
+      : await supabase
+          .from("campaigns")
+          .insert({ ...row, created_by: me.id })
+          .select("id")
+          .single();
 
     if (res.error) {
       setSaving(false);
       return toast.error(res.error.message);
     }
+    await refreshShared(["campaigns"]);
     toast.success(editing ? "Campaign updated." : "Campaign created.");
     router.push(`/campaigns/${res.data.id}`);
     router.refresh();
@@ -139,10 +139,13 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
                   onClick={() => setColor(c.value)}
                   className={cn(
                     "flex size-11 cursor-pointer items-center justify-center rounded-full border-2",
-                    color === c.value ? "border-navy-800" : "border-transparent"
+                    color === c.value ? "border-navy-800" : "border-transparent",
                   )}
                 >
-                  <span className="flex size-8 items-center justify-center rounded-full" style={{ background: c.value }}>
+                  <span
+                    className="flex size-8 items-center justify-center rounded-full"
+                    style={{ background: c.value }}
+                  >
                     {color === c.value ? (
                       <Check className="size-4 text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.8)]" strokeWidth={3} />
                     ) : null}
@@ -163,11 +166,22 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
           <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
             <div className="flex flex-col gap-2">
               <Label htmlFor="tags">Hashtags</Label>
-              <Input id="tags" placeholder="#Drupal #DrupalAsia" value={hashtags} onChange={(e) => setHashtags(e.target.value)} />
+              <Input
+                id="tags"
+                placeholder="#Drupal #DrupalAsia"
+                value={hashtags}
+                onChange={(e) => setHashtags(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="link">Link</Label>
-              <Input id="link" type="url" placeholder="https://" value={link} onChange={(e) => setLink(e.target.value)} />
+              <Input
+                id="link"
+                type="url"
+                placeholder="https://"
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+              />
             </div>
           </div>
         </fieldset>
