@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
-import { CalendarDays, CheckCircle2, MessageCircle, Palette, PencilLine } from "lucide-react";
+import { CalendarDays, CheckCircle2, MessageCircle, Palette, PencilLine, UserRound } from "lucide-react";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
 import { DeadlineLabel } from "@/components/content/deadline-label";
@@ -56,10 +56,11 @@ export function ContentCard({
     id: item.id,
     disabled: overlay,
   });
-  const people = [item.author_id, item.assignee_id, item.reviewer_id, item.designer_id]
-    .filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i)
-    .map((id) => teamById.get(id))
-    .filter((p): p is Profile => !!p);
+  // Who the card is waiting on: the reviewer while it's in Ready for review, otherwise the assignee.
+  const reviewing = item.status === "ready_for_review";
+  const ownerId = reviewing ? item.reviewer_id : item.assignee_id;
+  const person = ownerId ? teamById.get(ownerId) : undefined;
+  const roleText = reviewing ? "Reviewer" : "Assigned to";
 
   return (
     <Link
@@ -117,11 +118,33 @@ export function ContentCard({
             </span>
           ) : null}
         </span>
-        <span className="flex">
-          {people.map((p) => (
-            <UserAvatar key={p.id} profile={p} className="-ml-1.5 size-7 border-2 border-white text-[11px]" />
-          ))}
-        </span>
+        {person ? (
+          <span
+            className="flex min-w-0 items-center gap-1.5"
+            title={`${roleText}: ${person.full_name ?? "Team member"}`}
+          >
+            <span className="flex min-w-0 flex-col items-end leading-tight">
+              <span className="text-[11px] font-semibold text-muted-foreground">{roleText}</span>
+              <span className="truncate text-[13px] font-bold">
+                {person.full_name?.split(" ")[0] ?? "Team member"}
+              </span>
+            </span>
+            <UserAvatar
+              profile={person}
+              className={cn("size-8 shrink-0 text-[11px]", reviewing && "ring-2 ring-blue-600 ring-offset-1")}
+            />
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+            {reviewing ? "No reviewer" : "Unassigned"}
+            <span
+              aria-hidden
+              className="flex size-8 items-center justify-center rounded-full border-[1.5px] border-dashed border-input"
+            >
+              <UserRound className="size-4" />
+            </span>
+          </span>
+        )}
       </div>
     </Link>
   );
