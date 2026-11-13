@@ -118,6 +118,8 @@ export type Content = {
   platforms: Platform[];
   copy_linkedin: string | null;
   copy_x: string | null;
+  /** Optional first reply the same X account posts under the post (the rest of the details). No limit. */
+  copy_x_reply: string | null;
   copy_instagram: string | null;
   hashtags: string | null;
   link_url: string | null;

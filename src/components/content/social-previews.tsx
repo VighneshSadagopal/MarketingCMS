@@ -37,7 +37,7 @@ function Hashtagged({ text, tagClass }: { text: string; tagClass: string }) {
           </span>
         ) : (
           <span key={i}>{part}</span>
-        )
+        ),
       )}
     </>
   );
@@ -45,7 +45,12 @@ function Hashtagged({ text, tagClass }: { text: string; tagClass: string }) {
 
 function NoImages({ className }: { className?: string }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2 bg-ice-100 text-sm font-semibold text-muted-foreground", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center gap-2 bg-ice-100 text-sm font-semibold text-muted-foreground",
+        className,
+      )}
+    >
       <ImageOff className="size-6 text-blue-600" aria-hidden />
       No images yet
     </div>
@@ -118,31 +123,60 @@ function LinkedInPreview({ item, imageUrls }: Props) {
 
 function XPreview({ item, imageUrls }: Props) {
   const text = body(item.copy_x, item.hashtags, item.link_url);
+  const reply = item.copy_x_reply?.trim();
+  const actions = (
+    <div className="flex max-w-md justify-between pt-1 text-[#536471]">
+      <MessageCircle className="size-[18px]" role="img" aria-label="Reply" />
+      <Repeat2 className="size-[18px]" role="img" aria-label="Repost" />
+      <Heart className="size-[18px]" role="img" aria-label="Like" />
+      <BarChart3 className="size-[18px]" role="img" aria-label="Views" />
+      <Share className="size-[18px]" role="img" aria-label="Share" />
+    </div>
+  );
+  const avatar = (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-navy-800 font-label text-sm font-semibold text-white">
+      DA
+    </span>
+  );
   return (
     <article
-      aria-label="X post preview"
-      className="flex gap-3 rounded-xl border border-border bg-white px-4 py-3.5 font-[system-ui] text-[#0f1419]"
+      aria-label={reply ? "X post and first reply preview" : "X post preview"}
+      className="flex flex-col rounded-xl border border-border bg-white px-4 py-3.5 font-[system-ui] text-[#0f1419]"
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-navy-800 font-label text-sm font-semibold text-white">
-        DA
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex flex-wrap gap-1 text-[15px]">
-          <span className="font-bold">DrupalAsia</span>
-          <span className="text-[#536471]">· now</span>
+      <div className="flex gap-3">
+        {/* The thread line joins the post to the reply, as on X. */}
+        <div className="flex flex-col items-center">
+          {avatar}
+          {reply ? <span aria-hidden className="mt-1 w-0.5 flex-1 bg-[#cfd9de]" /> : null}
         </div>
-        <p className="text-[15px] leading-snug whitespace-pre-line">
-          <Hashtagged text={text} tagClass="text-blue-600" />
-        </p>
-        <ImageGrid urls={imageUrls} aspect="aspect-video" rounded="rounded-2xl border border-[#cfd9de]" />
-        <div className="flex max-w-md justify-between pt-1 text-[#536471]">
-          <MessageCircle className="size-[18px]" role="img" aria-label="Reply" />
-          <Repeat2 className="size-[18px]" role="img" aria-label="Repost" />
-          <Heart className="size-[18px]" role="img" aria-label="Like" />
-          <BarChart3 className="size-[18px]" role="img" aria-label="Views" />
-          <Share className="size-[18px]" role="img" aria-label="Share" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2 pb-3">
+          <div className="flex flex-wrap gap-1 text-[15px]">
+            <span className="font-bold">DrupalAsia</span>
+            <span className="text-[#536471]">· now</span>
+          </div>
+          <p className="text-[15px] leading-snug whitespace-pre-line">
+            <Hashtagged text={text} tagClass="text-blue-600" />
+          </p>
+          <ImageGrid urls={imageUrls} aspect="aspect-video" rounded="rounded-2xl border border-[#cfd9de]" />
+          {actions}
         </div>
       </div>
+      {reply ? (
+        <div className="flex gap-3 border-t border-[#eff3f4] pt-3">
+          {avatar}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex flex-wrap gap-1 text-[15px]">
+              <span className="font-bold">DrupalAsia</span>
+              <span className="text-[#536471]">· now</span>
+            </div>
+            <span className="text-[13px] font-semibold text-[#536471]">First reply · same account</span>
+            <p className="text-[15px] leading-snug whitespace-pre-line">
+              <Hashtagged text={reply} tagClass="text-blue-600" />
+            </p>
+            {actions}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -219,8 +253,7 @@ function InstagramPreview({ item, imageUrls }: Props) {
         <Bookmark className="size-6" role="img" aria-label="Save" />
       </div>
       <p className="px-3 pb-3.5 text-sm leading-[1.45] whitespace-pre-line">
-        <span className="font-bold">DrupalAsia</span>{" "}
-        <Hashtagged text={text} tagClass="text-blue-800" />
+        <span className="font-bold">DrupalAsia</span> <Hashtagged text={text} tagClass="text-blue-800" />
       </p>
     </article>
   );

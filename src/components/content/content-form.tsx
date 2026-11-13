@@ -125,6 +125,7 @@ export function ContentForm({
     if (!link.trim() && next.default_link) setLink(next.default_link);
   }
 
+  const [xReply, setXReply] = useState(initial?.copy_x_reply ?? "");
   const xChars = xCharCount(copy.x);
   const xOver = xChars > X_CHAR_LIMIT;
   const xOn = platforms.includes("x");
@@ -199,6 +200,7 @@ export function ContentForm({
         platforms: isBlog ? [] : platforms,
         copy_linkedin: !isBlog && platforms.includes("linkedin") ? copy.linkedin.trim() : null,
         copy_x: !isBlog && platforms.includes("x") ? copy.x.trim() : null,
+        copy_x_reply: !isBlog && platforms.includes("x") ? xReply.trim() || null : null,
         copy_instagram: !isBlog && platforms.includes("instagram") ? copy.instagram.trim() : null,
         hashtags: isBlog ? null : hashtags.trim() || null,
         body: isBlog ? body.trim() || null : null,
@@ -428,6 +430,30 @@ export function ContentForm({
                       value={copy[p.id]}
                       onChange={(e) => setCopy((c) => ({ ...c, [p.id]: e.target.value }))}
                     />
+                    {p.id === "x" ? (
+                      <div className="mt-2 flex flex-col gap-2 border-l-[3px] border-[#cfd9de] pl-4">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <Label htmlFor="copy-x-reply">
+                            X first reply <span className="font-medium text-muted-foreground">(optional)</span>
+                          </Label>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {xReply.trim() ? `${xCharCount(xReply)} characters · ` : ""}No limit
+                          </span>
+                        </div>
+                        <Textarea
+                          id="copy-x-reply"
+                          rows={4}
+                          aria-describedby="copy-x-reply-hint"
+                          placeholder="The rest of the details: agenda, speakers, ticket info, links…"
+                          value={xReply}
+                          onChange={(e) => setXReply(e.target.value)}
+                        />
+                        <span id="copy-x-reply-hint" className="text-[13px] text-muted-foreground">
+                          Posted from the same account as a reply under the X post, for the information that
+                          doesn&apos;t fit in {X_CHAR_LIMIT} characters.
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">

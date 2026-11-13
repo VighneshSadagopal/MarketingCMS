@@ -1017,3 +1017,9 @@ alter table public.content_comments add constraint content_comments_body_or_imag
   and cardinality(images) <= 4
   and (char_length(btrim(body)) >= 1 or cardinality(images) >= 1)
 );
+
+-- ---------------------------------------------------------------------------
+-- X first reply: an optional reply the same account posts under its own X post
+-- (the details that don't fit in 280 characters). No character limit.
+-- ---------------------------------------------------------------------------
+alter table public.content add column if not exists copy_x_reply text;
