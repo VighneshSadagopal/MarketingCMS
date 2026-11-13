@@ -85,7 +85,7 @@ function LinkedInPreview({ item, imageUrls }: Props) {
   return (
     <article
       aria-label="LinkedIn post preview"
-      className="overflow-hidden rounded-xl border border-border bg-white font-[system-ui] text-[#1d2226]"
+      className="min-w-0 overflow-hidden rounded-xl border border-border bg-white font-[system-ui] text-[#1d2226]"
     >
       <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-2">
         <span className="flex size-12 shrink-0 items-center justify-center rounded-sm bg-navy-800 font-label text-base font-semibold text-white">
@@ -97,7 +97,7 @@ function LinkedInPreview({ item, imageUrls }: Props) {
           <span className="text-xs text-[#5e6670]">Now · Public</span>
         </div>
       </div>
-      <p className="px-4 pb-3 text-sm leading-[1.45] whitespace-pre-line">
+      <p className="px-4 pb-3 text-sm leading-[1.45] whitespace-pre-line [overflow-wrap:anywhere]">
         <Hashtagged text={text} tagClass="font-semibold text-blue-600" />
       </p>
       <ImageGrid urls={imageUrls} aspect="aspect-[1200/627]" />
@@ -141,7 +141,7 @@ function XPreview({ item, imageUrls }: Props) {
   return (
     <article
       aria-label={reply ? "X post and first reply preview" : "X post preview"}
-      className="flex flex-col rounded-xl border border-border bg-white px-4 py-3.5 font-[system-ui] text-[#0f1419]"
+      className="flex min-w-0 flex-col rounded-xl border border-border bg-white px-4 py-3.5 font-[system-ui] text-[#0f1419]"
     >
       <div className="flex gap-3">
         {/* The thread line joins the post to the reply, as on X. */}
@@ -154,7 +154,7 @@ function XPreview({ item, imageUrls }: Props) {
             <span className="font-bold">DrupalAsia</span>
             <span className="text-[#536471]">· now</span>
           </div>
-          <p className="text-[15px] leading-snug whitespace-pre-line">
+          <p className="text-[15px] leading-snug whitespace-pre-line [overflow-wrap:anywhere]">
             <Hashtagged text={text} tagClass="text-blue-600" />
           </p>
           <ImageGrid urls={imageUrls} aspect="aspect-video" rounded="rounded-2xl border border-[#cfd9de]" />
@@ -170,7 +170,7 @@ function XPreview({ item, imageUrls }: Props) {
               <span className="text-[#536471]">· now</span>
             </div>
             <span className="text-[13px] font-semibold text-[#536471]">First reply · same account</span>
-            <p className="text-[15px] leading-snug whitespace-pre-line">
+            <p className="text-[15px] leading-snug whitespace-pre-line [overflow-wrap:anywhere]">
               <Hashtagged text={reply} tagClass="text-blue-600" />
             </p>
             {actions}
@@ -190,7 +190,7 @@ function InstagramPreview({ item, imageUrls }: Props) {
   return (
     <article
       aria-label="Instagram post preview"
-      className="overflow-hidden rounded-xl border border-border bg-white font-[system-ui] text-black"
+      className="min-w-0 overflow-hidden rounded-xl border border-border bg-white font-[system-ui] text-black"
     >
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2.5">
@@ -252,7 +252,7 @@ function InstagramPreview({ item, imageUrls }: Props) {
         ) : null}
         <Bookmark className="size-6" role="img" aria-label="Save" />
       </div>
-      <p className="px-3 pb-3.5 text-sm leading-[1.45] whitespace-pre-line">
+      <p className="px-3 pb-3.5 text-sm leading-[1.45] whitespace-pre-line [overflow-wrap:anywhere]">
         <span className="font-bold">DrupalAsia</span> <Hashtagged text={text} tagClass="text-blue-800" />
       </p>
     </article>

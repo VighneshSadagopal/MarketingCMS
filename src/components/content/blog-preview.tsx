@@ -22,7 +22,7 @@ export function BlogPreview({ item, imageUrls }: { item: Content; imageUrls: str
         <h3 className="text-[32px] leading-tight font-extrabold tracking-[-0.01em]">{item.title}</h3>
         {item.brief ? <p className="text-lg leading-relaxed text-muted-foreground">{item.brief}</p> : null}
         {item.body ? (
-          <div className="text-[17px] leading-[1.75] whitespace-pre-wrap">{item.body}</div>
+          <div className="text-[17px] leading-[1.75] whitespace-pre-wrap [overflow-wrap:anywhere]">{item.body}</div>
         ) : (
           <p className="rounded-md bg-ice-100 px-4 py-3 text-sm font-semibold">
             Not written yet. This is still an idea: open Edit to write it.
