@@ -60,7 +60,7 @@ export function ContentCard({
   const reviewing = item.status === "ready_for_review";
   const ownerId = reviewing ? item.reviewer_id : item.assignee_id;
   const person = ownerId ? teamById.get(ownerId) : undefined;
-  const roleText = reviewing ? "Reviewer" : "Assigned to";
+  const roleText = reviewing ? "Reviewer" : "Assignee";
 
   return (
     <Link
@@ -107,8 +107,8 @@ export function ContentCard({
           {counts.openRequests} {counts.openRequests === 1 ? "change" : "changes"} requested
         </span>
       ) : null}
-      <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-        <span className="flex items-center gap-1 text-[13px] font-semibold text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border pt-3">
+        <span className="flex items-center gap-1 text-[13px] font-semibold whitespace-nowrap text-muted-foreground">
           <CalendarDays className="size-3.5 text-blue-600" strokeWidth={2.5} aria-hidden />
           {dateLabel(item)}
           {counts?.comments ? (
@@ -124,7 +124,7 @@ export function ContentCard({
             title={`${roleText}: ${person.full_name ?? "Team member"}`}
           >
             <span className="flex min-w-0 flex-col items-end leading-tight">
-              <span className="text-[11px] font-semibold text-muted-foreground">{roleText}</span>
+              <span className="text-[11px] font-semibold whitespace-nowrap text-muted-foreground">{roleText}</span>
               <span className="truncate text-[13px] font-bold">
                 {person.full_name?.split(" ")[0] ?? "Team member"}
               </span>
