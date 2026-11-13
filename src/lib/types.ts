@@ -94,6 +94,15 @@ export function contentPath(item: { id: string; kind?: ContentKind | null }) {
   return item.kind === "blog" ? `/blogs/${item.id}` : `/content/${item.id}`;
 }
 
+/**
+ * Who a card is waiting on: the reviewer while it's in Ready for review (the assignee if no
+ * reviewer is set), otherwise the assignee. The board's person filter uses this.
+ */
+export function waitingOnId(item: Pick<Content, "status" | "assignee_id" | "reviewer_id">) {
+  if (item.status === "ready_for_review") return item.reviewer_id ?? item.assignee_id;
+  return item.assignee_id;
+}
+
 /** Rough reading time for a blog body (200 words a minute). */
 export function readingMinutes(text: string | null | undefined) {
   const words = (text ?? "").trim().split(/\s+/).filter(Boolean).length;

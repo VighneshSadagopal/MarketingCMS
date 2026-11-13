@@ -34,6 +34,7 @@ import {
   canApprove,
   canCreateContent,
   contentPath,
+  waitingOnId,
   type ContentKind,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -82,14 +83,8 @@ export function KanbanBoard({
     if (platform !== "all" && !c.platforms.includes(platform as Content["platforms"][number])) return false;
     if (campaignFilter === "none" && c.campaign_id) return false;
     if (campaignFilter !== "all" && campaignFilter !== "none" && c.campaign_id !== campaignFilter) return false;
-    if (
-      member &&
-      c.author_id !== member &&
-      c.assignee_id !== member &&
-      c.reviewer_id !== member &&
-      c.designer_id !== member
-    )
-      return false;
+    // A person's cards: the ones assigned to them, and in Ready for review the ones they review.
+    if (member && waitingOnId(c) !== member) return false;
     return true;
   });
 
@@ -195,7 +190,8 @@ export function KanbanBoard({
               key={p.id}
               type="button"
               aria-pressed={member === p.id}
-              aria-label={`Show content for ${p.full_name ?? "team member"}`}
+              aria-label={`Show cards assigned to ${p.full_name ?? "team member"} (or for them to review)`}
+              title={`${p.full_name ?? "Team member"}: assigned, or to review`}
               onClick={() => setMember(member === p.id ? null : p.id)}
               className={cn(
                 "-ml-2 cursor-pointer rounded-full border-[3px]",
