@@ -18,6 +18,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, GripVertical, Plus, X as XIco
 import { toast } from "sonner";
 
 import { CampaignTag } from "@/components/campaigns/campaign-tag";
+import { CopyPublicLink } from "@/components/calendar/copy-public-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -354,6 +355,7 @@ export function CalendarView({
           <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em]">Social media calendar</h1>
         </div>
         <div className="flex flex-wrap items-center gap-4">
+          <CopyPublicLink month={monthParam(year, month)} />
           <div className="flex items-center gap-4 text-[13px] font-semibold text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span aria-hidden className="size-3.5 rounded-sm bg-navy-800" />

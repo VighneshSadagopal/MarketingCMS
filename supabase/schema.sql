@@ -1023,3 +1023,43 @@ alter table public.content_comments add constraint content_comments_body_or_imag
 -- (the details that don't fit in 280 characters). No character limit.
 -- ---------------------------------------------------------------------------
 alter table public.content add column if not exists copy_x_reply text;
+
+-- ---------------------------------------------------------------------------
+-- Public marketing calendar (/public/calendar): anyone with the link can view it,
+-- signed in or not. It returns only titles, dates, campaigns and platforms —
+-- no briefs, copy, images, people, statuses or comments. Blogs aren't included.
+-- At most ~2 months per call.
+-- ---------------------------------------------------------------------------
+create or replace function public.public_calendar(p_from date, p_to date)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case when p_to < p_from or p_to - p_from > 62 then null else jsonb_build_object(
+    'posts', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id, 'title', c.title, 'publish_at', c.publish_at,
+        'campaign_id', c.campaign_id, 'platforms', c.platforms) order by c.publish_at)
+      from public.content c
+      where c.kind = 'post'
+        and c.publish_at >= (p_from::timestamp at time zone 'Asia/Kolkata')
+        and c.publish_at < ((p_to + 1)::timestamp at time zone 'Asia/Kolkata')
+    ), '[]'::jsonb),
+    'ideas', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'idea_date', i.idea_date, 'text', i.text,
+        'campaign_id', i.campaign_id, 'platforms', i.platforms, 'content_id', i.content_id) order by i.idea_date)
+      from public.post_ideas i
+      where i.idea_date between p_from and p_to
+    ), '[]'::jsonb),
+    'campaigns', coalesce((
+      select jsonb_agg(jsonb_build_object('id', k.id, 'name', k.name, 'color', k.color))
+      from public.campaigns k
+    ), '[]'::jsonb)
+  ) end;
+$$;
+
+revoke all on function public.public_calendar(date, date) from public;
+grant execute on function public.public_calendar(date, date) to anon, authenticated;
