@@ -22,6 +22,23 @@ Built with Next.js 16 (App Router), shadcn/ui components, Tailwind CSS v4 and Su
 - **Graphic requests**: in the content form, a content manager (or the owner) presses **Request graphic**, picks a designer and describes the graphic. The designer is added to the post (avatar on the board card, a "Graphic requested" label, and a "Graphics requested" list on their My work page). They upload the graphic in the Images section and mark it delivered, either from the content page or with a checkbox in the form. Requests, deliveries and cancellations show in the post's activity.
 - **Google sign-in with a team allowlist**: people sign in with "Continue with Google". Only emails the owner adds under **Team access** (account menu → Team access) can sign in; a Supabase "Before user created" hook refuses everyone else, and removing someone deletes their login (their posts stay). Names and avatars come from Google. The owner is set in `supabase/schema.sql` (`vighneshp65@gmail.com`).
 
+## Notifications
+
+- **Bell** (header): unread count, the latest notifications, live updates (Supabase Realtime) and a pop-up toast when one arrives. **Notifications page** (`/notifications`): the last 100, mark all read, and per-person settings for which kinds to receive.
+- **What notifies whom** (database triggers in `supabase/schema.sql`; nobody is notified about their own actions):
+  assigned → the new assignee; Ready for review → the reviewer; changes suggested → assignee and creator; comments → assignee, reviewer and creator (several within 30 minutes fold into one); graphic requested → the designer; graphic delivered → assignee and creator; approved for scheduling → the assignee; deadlines → a daily `pg_cron` job at 09:00 IST (review due within a day or overdue → assignee; scheduling due or overdue → reviewer), once per post per day. Old notifications are cleared after 60 days (read) or 120 days.
+- **Browser push**: each person turns it on per device on the Notifications page (on iPhone, after Add to Home Screen; iOS 16.4+). New notifications are posted by the database (`pg_net`) to `/api/push`, which sends them with `web-push`.
+
+### Setting up browser push (one time)
+
+1. Generate keys: `npx web-push generate-vapid-keys`.
+2. In **Vercel → Project → Settings → Environment Variables** add:
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (public key), `VAPID_PRIVATE_KEY` (private key), `VAPID_SUBJECT` (`mailto:` + an address you own), and `PUSH_WEBHOOK_SECRET` (any long random string, e.g. `openssl rand -hex 32`). Redeploy.
+3. In the **Supabase SQL editor** run, with the same secret: `select vault.create_secret('<PUSH_WEBHOOK_SECRET>', 'push_webhook_secret');`
+4. Open `/notifications`, choose **Turn on for this device**, then **Send me a test**.
+
+Until these are set, the bell works and push is simply off.
+
 ## Performance
 
 - Vercel functions run in Tokyo (`hnd1`, see `vercel.json`), next to the Supabase project.

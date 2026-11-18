@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { MainNav } from "@/components/main-nav";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { UserMenu } from "@/components/user-menu";
 import { Button } from "@/components/ui/button";
 import { canCreateContent, type Profile } from "@/lib/types";
@@ -19,7 +20,7 @@ export function AppHeader({ profile }: { profile: Profile }) {
         </Link>
         <MainNav />
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* The only way to add content from the header, so it stays visible on phones (icon only there). */}
         {canCreateContent(profile) ? (
           <Button asChild className="max-sm:size-11 max-sm:px-0">
@@ -29,6 +30,7 @@ export function AppHeader({ profile }: { profile: Profile }) {
             </Link>
           </Button>
         ) : null}
+        <NotificationBell userId={profile.id} />
         <UserMenu profile={profile} />
       </div>
     </header>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -6,7 +6,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "DrupalAsia Marketing CMS",
   description: "Plan, review and publish DrupalAsia social posts",
+  // Added to an iPhone Home Screen, it opens like an app (needed for notifications on iOS).
+  appleWebApp: { capable: true, title: "DA Marketing", statusBarStyle: "black-translucent" },
 };
+
+export const viewport: Viewport = { themeColor: "#03163b" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

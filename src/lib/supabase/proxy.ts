@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages anyone can open without signing in.
-const PUBLIC_PATHS = ["/login", "/auth", "/public"];
+const PUBLIC_PATHS = ["/login", "/auth", "/public", "/api/push", "/sw.js", "/manifest.webmanifest"];
 
 /** Refreshes the Supabase session cookie and sends signed-out visitors to /login. */
 export async function updateSession(request: NextRequest) {

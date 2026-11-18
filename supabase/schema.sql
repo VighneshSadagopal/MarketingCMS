@@ -1063,3 +1063,304 @@ $$;
 
 revoke all on function public.public_calendar(date, date) from public;
 grant execute on function public.public_calendar(date, date) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Notifications: in-app bell + browser push. Nobody is notified about their own actions.
+-- ---------------------------------------------------------------------------
+create extension if not exists pg_net;
+create extension if not exists pg_cron;
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  actor_id uuid references public.profiles (id) on delete set null,
+  content_id uuid references public.content (id) on delete cascade,
+  kind text not null check (kind in ('assigned', 'review_requested', 'changes_suggested', 'comment',
+                                     'graphic_requested', 'graphic_delivered', 'approved', 'deadline')),
+  title text not null,
+  body text,
+  count int not null default 1,
+  dedupe_key text,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+create unique index if not exists notifications_dedupe_idx on public.notifications (user_id, dedupe_key)
+  where dedupe_key is not null;
+
+alter table public.notifications enable row level security;
+drop policy if exists "own notifications read" on public.notifications;
+create policy "own notifications read" on public.notifications for select to authenticated using (user_id = auth.uid());
+drop policy if exists "own notifications update" on public.notifications;
+create policy "own notifications update" on public.notifications for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "own notifications delete" on public.notifications;
+create policy "own notifications delete" on public.notifications for delete to authenticated using (user_id = auth.uid());
+
+-- Live updates for the bell.
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'notifications') then
+    alter publication supabase_realtime add table public.notifications;
+  end if;
+end $$;
+
+-- Which kinds each person has turned off.
+create table if not exists public.notification_settings (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  muted text[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+alter table public.notification_settings enable row level security;
+drop policy if exists "own notification settings" on public.notification_settings;
+create policy "own notification settings" on public.notification_settings for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- Browser push subscriptions (one per browser/device).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "own push subscriptions read" on public.push_subscriptions;
+create policy "own push subscriptions read" on public.push_subscriptions for select to authenticated using (user_id = auth.uid());
+drop policy if exists "own push subscriptions delete" on public.push_subscriptions;
+create policy "own push subscriptions delete" on public.push_subscriptions for delete to authenticated using (user_id = auth.uid());
+
+-- Saving a subscription moves the browser to the signed-in person (a shared browser re-subscribes).
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_user_agent text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Not signed in' using errcode = '42501'; end if;
+  delete from public.push_subscriptions where endpoint = p_endpoint;
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+  values (auth.uid(), p_endpoint, p_p256dh, p_auth, left(p_user_agent, 300));
+end; $$;
+grant execute on function public.save_push_subscription(text, text, text, text) to authenticated;
+
+-- The sentence shown in the bell and in push messages.
+create or replace function public.notification_text(p_kind text, p_actor text, p_title text, p_body text, p_count int)
+returns text language sql immutable as $$
+  select case p_kind
+    when 'assigned' then coalesce(p_actor, 'Someone') || ' assigned you "' || p_title || '"'
+    when 'review_requested' then coalesce(p_actor, 'Someone') || ' sent "' || p_title || '" for your review'
+    when 'changes_suggested' then coalesce(p_actor, 'Someone') || ' suggested changes on "' || p_title || '"'
+      || coalesce(': ' || nullif(p_body, ''), '')
+    when 'comment' then case when p_count > 1
+      then p_count || ' new comments on "' || p_title || '"'
+      else coalesce(p_actor, 'Someone') || ' commented on "' || p_title || '"' || coalesce(': ' || nullif(p_body, ''), '') end
+    when 'graphic_requested' then coalesce(p_actor, 'Someone') || ' asked you for a graphic for "' || p_title || '"'
+      || coalesce(': ' || nullif(p_body, ''), '')
+    when 'graphic_delivered' then coalesce(p_actor, 'The designer') || ' delivered the graphic for "' || p_title || '"'
+    when 'approved' then coalesce(p_actor, 'Someone') || ' approved "' || p_title || '" for scheduling'
+    when 'deadline' then '"' || p_title || '": ' || coalesce(p_body, 'deadline coming up')
+    else p_title end;
+$$;
+
+-- Create (or, for comments, fold into) a notification for one person.
+create or replace function public.notify(p_user uuid, p_actor uuid, p_content uuid, p_kind text, p_body text,
+                                         p_dedupe text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_title text;
+  v_id uuid;
+begin
+  if p_user is null or p_user = p_actor then return; end if;
+  if not exists (select 1 from public.profiles where id = p_user) then return; end if;
+  if exists (select 1 from public.notification_settings where user_id = p_user and p_kind = any (muted)) then return; end if;
+  select title into v_title from public.content where id = p_content;
+  if v_title is null then return; end if;
+
+  -- Several comments on one post within 30 minutes become one notification (no extra push).
+  if p_kind = 'comment' then
+    select id into v_id from public.notifications
+    where user_id = p_user and content_id = p_content and kind = 'comment' and read_at is null
+      and created_at > now() - interval '30 minutes'
+    order by created_at desc limit 1;
+    if v_id is not null then
+      update public.notifications
+      set count = count + 1, body = left(p_body, 200), actor_id = p_actor, created_at = now()
+      where id = v_id;
+      return;
+    end if;
+  end if;
+
+  insert into public.notifications (user_id, actor_id, content_id, kind, title, body, dedupe_key)
+  values (p_user, p_actor, p_content, p_kind, left(v_title, 200), left(p_body, 200), p_dedupe)
+  on conflict (user_id, dedupe_key) where dedupe_key is not null do nothing;
+end; $$;
+revoke all on function public.notify(uuid, uuid, uuid, text, text, text) from public, anon, authenticated;
+
+-- Posts and blogs: assignment, review, approval and graphic requests.
+create or replace function public.content_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_actor uuid := auth.uid();
+begin
+  if tg_op = 'INSERT' then
+    perform public.notify(new.assignee_id, v_actor, new.id, 'assigned', null);
+    if new.status = 'ready_for_review' then
+      perform public.notify(new.reviewer_id, v_actor, new.id, 'review_requested', null);
+    end if;
+    if new.graphic_status = 'requested' then
+      perform public.notify(new.designer_id, v_actor, new.id, 'graphic_requested', new.graphic_note);
+    end if;
+    return null;
+  end if;
+
+  if new.assignee_id is distinct from old.assignee_id then
+    perform public.notify(new.assignee_id, v_actor, new.id, 'assigned', null);
+  end if;
+  if new.status = 'ready_for_review'
+     and (old.status is distinct from 'ready_for_review' or new.reviewer_id is distinct from old.reviewer_id) then
+    perform public.notify(new.reviewer_id, v_actor, new.id, 'review_requested', null);
+  end if;
+  if new.status = 'ready_for_schedule' and old.status is distinct from 'ready_for_schedule' then
+    perform public.notify(new.assignee_id, v_actor, new.id, 'approved', null);
+  end if;
+  if new.graphic_status = 'requested'
+     and (old.graphic_status is distinct from 'requested' or new.designer_id is distinct from old.designer_id) then
+    perform public.notify(new.designer_id, v_actor, new.id, 'graphic_requested', new.graphic_note);
+  end if;
+  if new.graphic_status = 'delivered' and old.graphic_status is distinct from 'delivered' then
+    perform public.notify(new.assignee_id, v_actor, new.id, 'graphic_delivered', null);
+    if new.author_id is distinct from new.assignee_id then
+      perform public.notify(new.author_id, v_actor, new.id, 'graphic_delivered', null);
+    end if;
+  end if;
+  return null;
+end; $$;
+
+drop trigger if exists content_notify on public.content;
+create trigger content_notify after insert or update on public.content
+  for each row execute function public.content_notify();
+
+-- Comments and change requests.
+create or replace function public.comment_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  c record;
+  v_body text := nullif(btrim(new.body), '');
+  r uuid;
+begin
+  if new.kind = 'status' then return null; end if;
+  select assignee_id, reviewer_id, author_id into c from public.content where id = new.content_id;
+  if not found then return null; end if;
+  if v_body is null and cardinality(new.images) > 0 then v_body := '(image)'; end if;
+
+  if new.kind = 'change_request' then
+    for r in select distinct x from unnest(array[c.assignee_id, c.author_id]) as x where x is not null loop
+      perform public.notify(r, new.author_id, new.content_id, 'changes_suggested', v_body);
+    end loop;
+  else
+    for r in select distinct x from unnest(array[c.assignee_id, c.reviewer_id, c.author_id]) as x where x is not null loop
+      perform public.notify(r, new.author_id, new.content_id, 'comment', v_body);
+    end loop;
+  end if;
+  return null;
+end; $$;
+
+drop trigger if exists comment_notify on public.content_comments;
+create trigger comment_notify after insert on public.content_comments
+  for each row execute function public.comment_notify();
+
+-- Daily deadline reminders (09:00 IST): review due within a day or overdue, scheduling due or overdue.
+-- At most one reminder per post per day. Also clears out old notifications.
+create or replace function public.notify_deadlines()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  p record;
+  v_due timestamptz;
+begin
+  for p in
+    select id, assignee_id, reviewer_id, status, publish_at from public.content
+    where publish_at is not null and status not in ('ready_for_schedule', 'done')
+      and publish_at > now() - interval '7 days'
+  loop
+    if p.status = 'ready_for_review' then
+      v_due := p.publish_at - interval '12 hours';
+      if v_due < now() + interval '24 hours' then
+        perform public.notify(coalesce(p.reviewer_id, p.assignee_id), null, p.id, 'deadline',
+          case when v_due < now() then 'scheduling is overdue'
+               else 'needs approving by ' || to_char(v_due at time zone 'Asia/Kolkata', 'DD Mon, HH24:MI') || ' IST' end,
+          'deadline:' || p.id || ':' || current_date);
+      end if;
+    else
+      v_due := p.publish_at - interval '48 hours';
+      if v_due < now() + interval '24 hours' then
+        perform public.notify(p.assignee_id, null, p.id, 'deadline',
+          case when v_due < now() then 'review is overdue'
+               else 'should be in Ready for review by ' || to_char(v_due at time zone 'Asia/Kolkata', 'DD Mon, HH24:MI') || ' IST' end,
+          'deadline:' || p.id || ':' || current_date);
+      end if;
+    end if;
+  end loop;
+
+  delete from public.notifications
+  where (read_at is not null and created_at < now() - interval '60 days')
+     or created_at < now() - interval '120 days';
+end; $$;
+
+select cron.schedule('notify-deadlines', '30 3 * * *', 'select public.notify_deadlines()');
+
+-- Browser push: each new notification is posted to the app's /api/push route, which sends it to the
+-- person's browsers. Needs the shared secret in Vault (name 'push_webhook_secret') and the same
+-- value as PUSH_WEBHOOK_SECRET in Vercel. Without it, nothing is sent and the bell still works.
+create or replace function public.notification_push()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_secret text;
+  v_subs jsonb;
+  v_actor text;
+  v_kind text;
+  v_path text;
+begin
+  select coalesce(jsonb_agg(jsonb_build_object('endpoint', endpoint, 'keys',
+           jsonb_build_object('p256dh', p256dh, 'auth', auth))), '[]'::jsonb)
+  into v_subs from public.push_subscriptions where user_id = new.user_id;
+  if jsonb_array_length(v_subs) = 0 then return null; end if;
+
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'push_webhook_secret' limit 1;
+  if v_secret is null then return null; end if;
+
+  select full_name into v_actor from public.profiles where id = new.actor_id;
+  select kind into v_kind from public.content where id = new.content_id;
+  v_path := case when v_kind = 'blog' then '/blogs/' else '/content/' end || new.content_id
+            || case when new.kind in ('comment', 'changes_suggested') then '#activity' else '' end;
+
+  perform net.http_post(
+    url := 'https://marketing-cms-beryl.vercel.app/api/push',
+    body := jsonb_build_object(
+      'title', 'DrupalAsia Marketing CMS',
+      'body', public.notification_text(new.kind, split_part(v_actor, ' ', 1), new.title, new.body, new.count),
+      'url', v_path,
+      'tag', new.id,
+      'subscriptions', v_subs),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', v_secret),
+    timeout_milliseconds := 5000);
+  return null;
+exception when others then
+  return null; -- a push problem must never block the notification itself
+end; $$;
+
+drop trigger if exists notification_push on public.notifications;
+create trigger notification_push after insert on public.notifications
+  for each row execute function public.notification_push();
+
+-- /api/push reports browsers that have unsubscribed (gone), so they're removed.
+create or replace function public.prune_push_subscriptions(p_secret text, p_endpoints text[])
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_secret is null or p_secret is distinct from
+     (select decrypted_secret from vault.decrypted_secrets where name = 'push_webhook_secret' limit 1) then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  delete from public.push_subscriptions where endpoint = any (p_endpoints);
+end; $$;
+revoke all on function public.prune_push_subscriptions(text, text[]) from public;
+grant execute on function public.prune_push_subscriptions(text, text[]) to anon, authenticated;
+
