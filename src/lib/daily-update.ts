@@ -8,7 +8,7 @@ const TZ = "Asia/Kolkata";
 const HOUR = 60 * 60 * 1000;
 const IST_OFFSET = 5.5 * HOUR; // India has no daylight saving
 
-/** Start of a calendar day (YYYY-MM-DD) in India time, as a Date. */
+/** Start of a calendar day (YYYY-MM-DD) in India time. */
 function istDayStart(iso: string) {
   return new Date(Date.parse(`${iso}T00:00:00Z`) - IST_OFFSET);
 }
@@ -20,25 +20,72 @@ function addDaysIso(iso: string, n: number) {
 export function todayIst() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
 }
-
-const dayLabel = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(
+const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", { timeZone: TZ, ...o });
+const longDay = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${iso}T00:00:00Z`))
+    .replace(/^(\w+) /, "$1, ");
+const shortDay = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "UTC" }).format(
     new Date(`${iso}T00:00:00Z`),
   );
-const whenLabel = (ms: number) =>
-  new Intl.DateTimeFormat("en-GB", {
-    timeZone: TZ,
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(ms);
-const timeLabel = (ms: number) =>
-  new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(ms);
+const dayTime = (ms: number) =>
+  `${fmt({ day: "numeric", month: "short" }).format(ms)}, ${fmt({ hour: "2-digit", minute: "2-digit" }).format(ms)} IST`;
+const time = (ms: number) => `${fmt({ hour: "2-digit", minute: "2-digit" }).format(ms)} IST`;
 
-/** Slack needs &, < and > escaped, and | would break a link label. */
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\|/g, "-");
+// ---------------------------------------------------------------------------
+// A tiny document model, rendered twice: HTML (pastes into Slack with bold, links and lists)
+// and Slack markup text (fallback).
+// ---------------------------------------------------------------------------
+type Part = string | { b: string } | { href: string; text: string };
+type Li = { parts: Part[]; sub?: Part[][] };
+type Block = { p: Part[] } | { ul: Li[] } | { ol: Li[] } | { gap: true };
+
+const htmlEsc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const slackEsc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function partHtml(p: Part) {
+  if (typeof p === "string") return htmlEsc(p);
+  if ("b" in p) return `<b>${htmlEsc(p.b)}</b>`;
+  return `<a href="${htmlEsc(p.href)}">${htmlEsc(p.text)}</a>`;
+}
+function partSlack(p: Part) {
+  if (typeof p === "string") return slackEsc(p);
+  if ("b" in p) return `*${slackEsc(p.b)}*`;
+  return `<${p.href}|${slackEsc(p.text).replace(/\|/g, "-")}>`;
+}
+function renderHtml(blocks: Block[]) {
+  const li = (l: Li) =>
+    `<li>${l.parts.map(partHtml).join("")}${
+      l.sub?.length ? `<ul>${l.sub.map((s) => `<li>${s.map(partHtml).join("")}</li>`).join("")}</ul>` : ""
+    }</li>`;
+  return blocks
+    .map((b) => {
+      if ("gap" in b) return "<p><br></p>";
+      if ("p" in b) return `<p>${b.p.map(partHtml).join("")}</p>`;
+      if ("ul" in b) return `<ul>${b.ul.map(li).join("")}</ul>`;
+      return `<ol>${b.ol.map(li).join("")}</ol>`;
+    })
+    .join("");
+}
+function renderSlack(blocks: Block[]) {
+  const out: string[] = [];
+  for (const b of blocks) {
+    if ("gap" in b) out.push("");
+    else if ("p" in b) out.push(b.p.map(partSlack).join(""));
+    else {
+      const list = "ul" in b ? b.ul : b.ol;
+      list.forEach((l, i) => {
+        out.push(`${"ul" in b ? "•" : `${i + 1}.`} ${l.parts.map(partSlack).join("")}`);
+        for (const s of l.sub ?? []) out.push(`      ◦ ${s.map(partSlack).join("")}`);
+      });
+    }
+  }
+  return out.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 
 type Row = Pick<
   Content,
@@ -53,23 +100,30 @@ type Row = Pick<
   | "created_at"
   | "author_id"
 >;
-type Activity = { content_id: string; author_id: string | null; kind: string; body: string; created_at: string };
+type Activity = { content_id: string; author_id: string | null; kind: string; body: string };
 
-const MOVES: { to: string; heading: string }[] = [
-  { to: "Done / Posted", heading: "Posted" },
-  { to: "Ready for schedule", heading: "Approved for scheduling" },
-  { to: "Ready for review", heading: "Sent for review" },
-  { to: "Changes suggested", heading: "Changes suggested" },
-  { to: "In progress", heading: "Started" },
-];
+/** Activity categories per person, in display order. The marker stands in for a coloured badge. */
+const CATEGORIES = [
+  { key: "done", to: "Done / Posted", label: "Completed / Posted", marker: "🟢" },
+  { key: "approved", to: "Ready for schedule", label: "Approved for Scheduling", marker: "🟢" },
+  { key: "review", to: "Ready for review", label: "Sent for Review", marker: "🔵" },
+  { key: "progress", to: "In progress", label: "In Progress", marker: "🟡" },
+  { key: "changes", to: "Changes suggested", label: "Changes Requested", marker: "🟡" },
+  { key: "added", to: null, label: "Added", marker: "⚪" },
+  { key: "overdue", to: null, label: "Overdue", marker: "🔴" },
+] as const;
+type CatKey = (typeof CATEGORIES)[number]["key"];
 
-/** Builds the owner's daily update for Slack: today's progress, tomorrow's tasks, tomorrow's posts. */
-export async function buildDailyUpdate(dayIso: string, baseUrl: string) {
+type Task = { r: Row; due: number; required: string; current: string };
+
+/** Builds the owner's daily update: per-person activity, deadlines, tomorrow's posts and totals. */
+export async function buildDailyUpdate(dayIso: string, baseUrl: string): Promise<{ html: string; text: string }> {
   const supabase = await createClient();
   const dayStart = istDayStart(dayIso);
   const tomorrowIso = addDaysIso(dayIso, 1);
   const tomorrowStart = istDayStart(tomorrowIso);
   const tomorrowEnd = istDayStart(addDaysIso(dayIso, 2));
+  const now = Date.now();
 
   const [team, content, activity] = await Promise.all([
     supabase.from("profiles").select("id, full_name"),
@@ -78,114 +132,136 @@ export async function buildDailyUpdate(dayIso: string, baseUrl: string) {
       .select("id, kind, title, status, publish_at, assignee_id, reviewer_id, platforms, created_at, author_id"),
     supabase
       .from("content_comments")
-      .select("content_id, author_id, kind, body, created_at")
+      .select("content_id, author_id, kind, body")
       .gte("created_at", dayStart.toISOString())
       .lt("created_at", tomorrowStart.toISOString())
       .order("created_at"),
   ]);
   if (content.error) throw new Error(content.error.message);
 
-  const name = new Map((team.data ?? []).map((p) => [p.id, (p.full_name ?? "Someone").split(" ")[0]]));
-  const who = (id: string | null) => (id ? (name.get(id) ?? "Someone") : "Unassigned");
+  const first = new Map((team.data ?? []).map((p) => [p.id, (p.full_name ?? "Someone").split(" ")[0]]));
+  const who = (id: string | null) => (id ? (first.get(id) ?? "Someone") : "Unassigned");
   const rows = (content.data ?? []) as Row[];
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const link = (r: Row) =>
-    `<${baseUrl}${r.kind === "blog" ? "/blogs/" : "/content/"}${r.id}|${esc(r.title)}>${r.kind === "blog" ? " (blog)" : ""}`;
+  const link = (r: Row): Part => ({
+    href: `${baseUrl}${r.kind === "blog" ? "/blogs/" : "/content/"}${r.id}`,
+    text: r.kind === "blog" ? `${r.title} (blog)` : r.title,
+  });
 
-  const lines: string[] = [];
-  lines.push(`*DrupalAsia marketing update · ${dayLabel(dayIso)}*`);
+  // Per person, per category.
+  const people = new Map<string, Map<CatKey, Li[]>>();
+  const add = (person: string, cat: CatKey, li: Li) => {
+    const cats = people.get(person) ?? new Map<CatKey, Li[]>();
+    cats.set(cat, [...(cats.get(cat) ?? []), li]);
+    people.set(person, cats);
+  };
+  const totals: Record<CatKey, number> = {
+    done: 0,
+    approved: 0,
+    review: 0,
+    progress: 0,
+    changes: 0,
+    added: 0,
+    overdue: 0,
+  };
 
-  // 1. Today
-  lines.push("", "*Today's update*");
+  // Moves today: the latest move of each post into each column, credited to whoever made it.
   const acts = (activity.data ?? []) as Activity[];
-  let todayCount = 0;
-  for (const m of MOVES) {
-    // Latest move per post into this column today.
-    const seen = new Map<string, Activity>();
-    for (const a of acts) if (a.kind === "status" && a.body.endsWith(` to ${m.to}`)) seen.set(a.content_id, a);
-    const items = [...seen.values()].filter((a) => byId.has(a.content_id));
-    if (!items.length) continue;
-    todayCount += items.length;
-    lines.push(`_${m.heading} (${items.length})_`);
-    for (const a of items) {
-      const r = byId.get(a.content_id)!;
-      const extra = m.to === "Ready for review" && r.reviewer_id ? ` · reviewer: ${who(r.reviewer_id)}` : "";
-      lines.push(`• ${link(r)} by ${who(a.author_id)}${extra}`);
+  for (const c of CATEGORIES) {
+    if (!c.to) continue;
+    const latest = new Map<string, Activity>();
+    for (const a of acts) if (a.kind === "status" && a.body.endsWith(` to ${c.to}`)) latest.set(a.content_id, a);
+    for (const a of latest.values()) {
+      const r = byId.get(a.content_id);
+      if (!r) continue;
+      const parts: Part[] = [link(r)];
+      if (c.key === "review" && r.reviewer_id) parts.push(` → Reviewer: ${who(r.reviewer_id)}`);
+      add(who(a.author_id), c.key, { parts });
+      totals[c.key]++;
     }
   }
-  const created = rows.filter(
-    (r) => r.created_at >= dayStart.toISOString() && r.created_at < tomorrowStart.toISOString(),
-  );
-  if (created.length) {
-    todayCount += created.length;
-    lines.push(`_New posts and ideas added (${created.length})_`);
-    for (const r of created) lines.push(`• ${link(r)} · assignee: ${who(r.assignee_id)}`);
+  for (const r of rows) {
+    if (r.created_at >= dayStart.toISOString() && r.created_at < tomorrowStart.toISOString()) {
+      add(who(r.author_id), "added", { parts: [link(r), ` → Assignee: ${who(r.assignee_id)}`] });
+      totals.added++;
+    }
   }
-  const comments = acts.filter((a) => a.kind === "comment").length;
-  const requests = acts.filter((a) => a.kind === "change_request").length;
-  if (comments || requests) {
-    lines.push(
-      `_Review activity:_ ${comments} ${comments === 1 ? "comment" : "comments"}, ${requests} change ${
-        requests === 1 ? "request" : "requests"
-      }`,
-    );
-  }
-  if (!todayCount && !comments && !requests) lines.push("• No board changes today.");
 
-  // 2. Tomorrow's tasks: the next deadline for each open post, if it falls by the end of tomorrow.
-  type Task = { r: Row; due: number; what: string; owner: string | null; reviewer: string | null };
+  // Each open post's next deadline (board rules).
   const tasks: Task[] = [];
+  const before: ContentStatus[] = ["todo", "changes_suggested", "in_progress"];
   for (const r of rows) {
     if (!r.publish_at || r.status === "done") continue;
     const target = Date.parse(r.publish_at);
-    let due: number;
-    let what: string;
-    let owner: string | null = r.assignee_id;
-    const before: ContentStatus[] = ["todo", "changes_suggested", "in_progress"];
+    if (target < dayStart.getTime() - 7 * 24 * HOUR) continue;
     if (before.includes(r.status)) {
-      due = target - REVIEW_LEAD_HOURS * HOUR;
-      what = "Ready for review";
+      tasks.push({
+        r,
+        due: target - REVIEW_LEAD_HOURS * HOUR,
+        required: "Ready for Review",
+        current: statusMeta(r.status).label,
+      });
     } else if (r.status === "ready_for_review") {
-      due = target - SCHEDULE_LEAD_HOURS * HOUR;
-      what = "Approve for scheduling";
-      owner = r.reviewer_id ?? r.assignee_id;
+      tasks.push({
+        r,
+        due: target - SCHEDULE_LEAD_HOURS * HOUR,
+        required: "Approved for Scheduling",
+        current: "Ready for Review",
+      });
     } else {
-      due = target; // ready_for_schedule: needs posting
-      what = "Post";
-    }
-    if (due < tomorrowEnd.getTime() && target > dayStart.getTime() - 7 * 24 * HOUR) {
-      tasks.push({ r, due, what, owner, reviewer: r.reviewer_id });
+      tasks.push({ r, due: target, required: "Posted", current: "Ready for Schedule" });
     }
   }
   tasks.sort((a, b) => a.due - b.due);
-  const now = Date.now();
   const overdue = tasks.filter((t) => t.due < now);
-  const laterToday = tasks.filter((t) => t.due >= now && t.due < tomorrowStart.getTime());
-  const upcoming = tasks.filter((t) => t.due >= Math.max(now, tomorrowStart.getTime()));
+  const dueToday = tasks.filter((t) => t.due >= now && t.due < tomorrowStart.getTime());
+  const dueTomorrow = tasks.filter(
+    (t) => t.due >= Math.max(now, tomorrowStart.getTime()) && t.due < tomorrowEnd.getTime(),
+  );
 
-  const taskLine = (t: Task) => {
-    const parts = [
-      `assignee: ${who(t.r.assignee_id)}`,
-      `${t.what} by ${whenLabel(t.due)} IST`,
-      `now: ${statusMeta(t.r.status).label}`,
+  for (const t of overdue) {
+    const sub: Part[][] = [
+      [`Current status: ${t.current}`],
+      [`Required: ${t.required}`],
+      [`Deadline: ${dayTime(t.due)}`],
     ];
-    if (t.reviewer) parts.push(`reviewer: ${who(t.reviewer)}`);
-    return `• ${link(t.r)} · ${parts.join(" · ")}`;
+    if (t.r.reviewer_id) sub.push([`Reviewer: ${who(t.r.reviewer_id)}`]);
+    add(who(t.r.assignee_id), "overdue", { parts: [link(t.r)], sub });
+    totals.overdue++;
+  }
+
+  // ---- Document ----
+  const blocks: Block[] = [];
+  blocks.push({ p: [{ b: "📊 DrupalAsia Marketing Update" }] }, { p: [longDay(dayIso)] }, { gap: true });
+
+  const order = [...people.entries()].sort(
+    (a, b) => [...b[1].values()].flat().length - [...a[1].values()].flat().length || a[0].localeCompare(b[0]),
+  );
+  if (!order.length) blocks.push({ p: ["No board activity today."] }, { gap: true });
+  for (const [person, cats] of order) {
+    blocks.push({ p: [{ b: `👤 ${person.toUpperCase()}` }] });
+    for (const c of CATEGORIES) {
+      const items = cats.get(c.key);
+      if (!items?.length) continue;
+      blocks.push({ p: [{ b: `${c.marker} ${c.label} · ${items.length}` }] }, { ul: items });
+    }
+    blocks.push({ gap: true });
+  }
+
+  const actionLine = (t: Task): Li => {
+    const verb =
+      t.required === "Posted"
+        ? `${who(t.r.assignee_id)} to post it`
+        : `${who(t.r.assignee_id)} to move from ${t.current} to ${t.required}`;
+    const reviewer = t.r.reviewer_id && t.required !== "Posted" ? ` (reviewer: ${who(t.r.reviewer_id)})` : "";
+    return { parts: [link(t.r), ` – ${verb}${reviewer}, by ${time(t.due)}.`] };
   };
-
-  if (laterToday.length) {
-    lines.push("", `*Due later today (${laterToday.length})*`);
-    for (const t of laterToday) lines.push(taskLine(t));
-  }
-  lines.push("", `*Important for tomorrow (${dayLabel(tomorrowIso)})*`);
-  if (!upcoming.length) lines.push("• No deadlines tomorrow.");
-  for (const t of upcoming) lines.push(taskLine(t));
-  if (overdue.length) {
-    lines.push("", `*Overdue (${overdue.length})*`);
-    for (const t of overdue) lines.push(taskLine(t));
+  blocks.push({ p: [{ b: "⏰ DEADLINES & ACTION ITEMS" }] });
+  if (dueToday.length) blocks.push({ p: [{ b: `Due today – ${shortDay(dayIso)}` }] }, { ol: dueToday.map(actionLine) });
+  if (dueTomorrow.length) {
+    blocks.push({ p: [{ b: `Due tomorrow – ${shortDay(tomorrowIso)}` }] }, { ol: dueTomorrow.map(actionLine) });
   }
 
-  // 3. Going out tomorrow
   const going = rows
     .filter(
       (r) =>
@@ -194,18 +270,60 @@ export async function buildDailyUpdate(dayIso: string, baseUrl: string) {
         Date.parse(r.publish_at) < tomorrowEnd.getTime(),
     )
     .sort((a, b) => Date.parse(a.publish_at!) - Date.parse(b.publish_at!));
-  lines.push("", `*Going out tomorrow (${going.length})*`);
-  if (!going.length) lines.push("• Nothing scheduled for tomorrow.");
-  for (const r of going) {
-    const ready = r.status === "ready_for_schedule" || r.status === "done";
-    const platforms = r.platforms.length ? ` (${r.platforms.map(platformLabel).join(", ")})` : "";
-    lines.push(
-      `• ${timeLabel(Date.parse(r.publish_at!))} · ${link(r)}${platforms} · ${
-        ready ? "ready" : `not ready yet: ${statusMeta(r.status).label}`
-      } · assignee: ${who(r.assignee_id)}`,
-    );
+  blocks.push({ p: [{ b: `Going out tomorrow – ${shortDay(tomorrowIso)}` }] });
+  if (going.length) {
+    blocks.push({
+      ol: going.map((r) => ({
+        parts: [
+          link(r),
+          ` – ${r.platforms.length ? r.platforms.map(platformLabel).join(", ") : "Blog"} · ${time(Date.parse(r.publish_at!))}.`,
+        ],
+      })),
+    });
+    const notReady = going.filter((r) => r.status !== "ready_for_schedule" && r.status !== "done");
+    if (notReady.length) {
+      const states = [...new Set(notReady.map((r) => statusMeta(r.status).label))];
+      const subject =
+        notReady.length === going.length
+          ? going.length === 2
+            ? "Both posts are"
+            : going.length === 1
+              ? "This post is"
+              : "All posts are"
+          : `${notReady.length} of these posts are`;
+      blocks.push({ p: [`⚠️ ${subject} currently ${states.join(" / ")} and need approval before publishing.`] });
+    }
+  } else {
+    blocks.push({ p: ["Nothing scheduled to go out tomorrow."] });
   }
+  if (!dueTomorrow.length) blocks.push({ p: ["Tomorrow's deadlines: None."] });
+  blocks.push({ gap: true });
 
-  lines.push("", `_Board: ${baseUrl}/board_`);
-  return lines.join("\n");
+  const comments = acts.filter((a) => a.kind === "comment").length;
+  const requests = acts.filter((a) => a.kind === "change_request").length;
+  blocks.push(
+    { p: [{ b: "📈 TEAM ACTIVITY" }] },
+    {
+      ul: [
+        { parts: [`Posted: ${totals.done}`] },
+        { parts: [`Approved for Scheduling: ${totals.approved}`] },
+        { parts: [`Sent for Review: ${totals.review}`] },
+        { parts: [`Changes Requested: ${totals.changes}`] },
+        { parts: [`Started: ${totals.progress}`] },
+        ...(totals.added ? [{ parts: [`Added: ${totals.added}`] } as Li] : []),
+        { parts: [`Overdue: ${totals.overdue}`] },
+        {
+          parts: [
+            `Review activity: ${comments} ${comments === 1 ? "comment" : "comments"}, ${requests} change ${
+              requests === 1 ? "request" : "requests"
+            }`,
+          ],
+        },
+      ],
+    },
+    { gap: true },
+    { p: ["🔗 Marketing Board: ", { href: `${baseUrl}/board`, text: `${baseUrl}/board` }] },
+  );
+
+  return { html: renderHtml(blocks), text: renderSlack(blocks) };
 }

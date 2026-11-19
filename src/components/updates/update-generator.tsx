@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Copy, RefreshCw, Sparkles } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { Copy, FileText, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateDailyUpdate } from "@/app/(app)/updates/actions";
@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 export function UpdateGenerator({ today }: { today: string }) {
   const [day, setDay] = useState(today);
+  const [html, setHtml] = useState("");
   const [text, setText] = useState("");
+  const [edited, setEdited] = useState(false);
   const [pending, startTransition] = useTransition();
+  const box = useRef<HTMLDivElement>(null);
 
   function generate() {
     startTransition(async () => {
@@ -23,17 +25,41 @@ export function UpdateGenerator({ today }: { today: string }) {
         toast.error(r.error);
         return;
       }
+      setHtml(r.html);
       setText(r.text);
+      setEdited(false);
       toast.success("Update generated. Review it, then copy it to Slack.");
     });
   }
 
-  async function copy() {
+  /** Copies formatted text (Slack keeps bold, links and lists when pasted), with plain text as fallback. */
+  async function copyFormatted() {
+    const el = box.current;
+    if (!el) return;
+    const plain = edited ? el.innerText : text;
     try {
-      await navigator.clipboard.writeText(text);
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([el.innerHTML], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
       toast.success("Copied. Paste it into Slack.");
     } catch {
-      toast.error("Couldn't copy. Select the text and copy it instead.");
+      toast.error("Couldn't copy. Select the update and copy it instead.");
+    }
+  }
+
+  async function copyMarkup() {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied as Slack markup text.");
+    } catch {
+      toast.error("Couldn't copy.");
     }
   }
 
@@ -53,28 +79,53 @@ export function UpdateGenerator({ today }: { today: string }) {
             />
           </div>
           <Button onClick={generate} disabled={pending}>
-            {text ? <RefreshCw strokeWidth={2.5} /> : <Sparkles strokeWidth={2.5} />}
-            {pending ? "Generating…" : text ? "Generate again" : "Generate update"}
+            {html ? <RefreshCw strokeWidth={2.5} /> : <Sparkles strokeWidth={2.5} />}
+            {pending ? "Generating…" : html ? "Generate again" : "Generate update"}
           </Button>
-          {text ? (
-            <Button variant="outline" onClick={copy} disabled={pending}>
-              <Copy strokeWidth={2.5} />
-              Copy for Slack
-            </Button>
+          {html ? (
+            <>
+              <Button variant="outline" onClick={copyFormatted} disabled={pending}>
+                <Copy strokeWidth={2.5} />
+                Copy for Slack
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={copyMarkup}
+                disabled={pending || edited}
+                title={edited ? "Not available after editing; use Copy for Slack" : undefined}
+              >
+                <FileText strokeWidth={2.5} />
+                Copy as plain text
+              </Button>
+            </>
           ) : null}
         </div>
+
         <div className="flex flex-col gap-2">
-          <Label htmlFor="update-text">Update</Label>
-          <Textarea
-            id="update-text"
-            rows={22}
-            className="min-h-96 font-mono text-[13px] leading-relaxed"
-            placeholder="Press Generate update. You can edit the text before copying it."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
+          <span id="update-label" className="text-sm font-bold">
+            Update
+          </span>
+          {html ? (
+            <div
+              ref={box}
+              role="textbox"
+              aria-multiline="true"
+              aria-labelledby="update-label"
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => setEdited(true)}
+              className="update-doc min-h-96 rounded-md border border-input bg-white px-5 py-4 text-[15px] leading-relaxed text-navy-800 outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          ) : (
+            <div className="flex min-h-48 items-center justify-center rounded-md border border-dashed border-input bg-white px-5 py-4 text-sm text-muted-foreground">
+              Press Generate update. You can edit the text before copying it.
+            </div>
+          )}
           <span className="text-[13px] text-muted-foreground">
-            Written in Slack formatting: *bold*, _italic_ and links that show as post titles once pasted.
+            Copy for Slack keeps the bold headings, clickable post titles and lists when pasted. Copy as plain text
+            gives Slack markup instead.
           </span>
         </div>
       </div>

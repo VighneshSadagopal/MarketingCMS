@@ -92,3 +92,33 @@
     outline-color: var(--cyan-300);
   }
 }
+
+/* Daily update preview (also what's copied to Slack). */
+.update-doc p {
+  margin: 0.15rem 0;
+}
+.update-doc ul,
+.update-doc ol {
+  margin: 0.25rem 0 0.6rem;
+  padding-left: 1.4rem;
+}
+.update-doc ul {
+  list-style: disc;
+}
+.update-doc ol {
+  list-style: decimal;
+}
+.update-doc ul ul {
+  list-style: circle;
+  margin: 0.15rem 0 0.3rem;
+}
+.update-doc li {
+  margin: 0.15rem 0;
+}
+.update-doc a {
+  color: var(--blue-600);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
