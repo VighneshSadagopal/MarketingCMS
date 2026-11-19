@@ -416,8 +416,10 @@ export default function GuidelinesPage() {
             title="Tag every link"
             intro={
               <>
-                Use one campaign name, <code className="font-mono font-bold text-navy-800">{UTM_CAMPAIGN}</code>, and a
-                short lowercase content name per post. Build the link here and paste it into the post.
+                The CMS tags DrupalAsia links for you when a post is saved: the platform as the source,{" "}
+                <code className="font-mono font-bold text-navy-800">social</code> as the medium, and the
+                campaign&apos;s UTM campaign name (set on the campaign). For links shared outside the CMS, use{" "}
+                <code className="font-mono font-bold text-navy-800">{UTM_CAMPAIGN}</code> and build the link here.
               </>
             }
           >

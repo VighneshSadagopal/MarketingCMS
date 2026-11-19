@@ -187,6 +187,8 @@ export type Campaign = {
   color: string;
   default_hashtags: string | null;
   default_link: string | null;
+  /** utm_campaign for this campaign's links, e.g. dac27_speaker_promotion. */
+  utm_campaign: string | null;
   status: CampaignStatus;
   created_by: string | null;
   created_at: string;

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { friendlyDbError } from "@/lib/errors";
 import { createClient, publicImageUrl } from "@/lib/supabase/client";
+import { UTM_MEDIUM, tagLinks } from "@/lib/utm";
 import {
   MAX_IMAGES,
   PLATFORMS,
@@ -157,6 +158,43 @@ export function ContentForm({
     });
   }
 
+  /**
+   * Adds UTM tags to every DrupalAsia link in the post copy: utm_source per platform, utm_medium,
+   * and utm_campaign from the post's campaign when it has one. Other sites are left alone.
+   */
+  function utmTagged() {
+    const utmCampaign = campaign?.utm_campaign ?? null;
+    let changed = 0;
+    const tag = (text: string, source: string) => {
+      const r = tagLinks(text, { source, campaign: utmCampaign });
+      changed += r.changed;
+      return r.text;
+    };
+    const next = {
+      copy: {
+        linkedin: tag(copy.linkedin, "linkedin"),
+        x: tag(copy.x, "x"),
+        instagram: tag(copy.instagram, "instagram"),
+      },
+      xReply: tag(xReply, "x"),
+      // The link field is shared by all platforms: tag it for the one platform, or as "social".
+      link: tag(link, platforms.length === 1 ? platforms[0] : "social"),
+    };
+    return { ...next, changed };
+  }
+
+  function applyUtm() {
+    const t = utmTagged();
+    setCopy(t.copy);
+    setXReply(t.xReply);
+    setLink(t.link);
+    toast.success(
+      t.changed
+        ? `Tagged ${t.changed} DrupalAsia ${t.changed === 1 ? "link" : "links"}.`
+        : "All DrupalAsia links already have these UTM tags.",
+    );
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return toast.error("Add a title.");
@@ -171,6 +209,15 @@ export function ContentForm({
         return toast.error(`Pick a date within the campaign: ${campaignDateRange(campaign)}.`);
       }
     }
+
+    // Tag DrupalAsia links on every save, so they're never missed.
+    const tagged = isBlog ? null : utmTagged();
+    if (tagged) {
+      setCopy(tagged.copy);
+      setXReply(tagged.xReply);
+      setLink(tagged.link);
+    }
+    const out = tagged ?? { copy, xReply, link };
 
     setSaving(true);
     const supabase = createClient();
@@ -198,14 +245,14 @@ export function ContentForm({
         brief: brief.trim() || null,
         kind,
         platforms: isBlog ? [] : platforms,
-        copy_linkedin: !isBlog && platforms.includes("linkedin") ? copy.linkedin.trim() : null,
-        copy_x: !isBlog && platforms.includes("x") ? copy.x.trim() : null,
-        copy_x_reply: !isBlog && platforms.includes("x") ? xReply.trim() || null : null,
-        copy_instagram: !isBlog && platforms.includes("instagram") ? copy.instagram.trim() : null,
+        copy_linkedin: !isBlog && platforms.includes("linkedin") ? out.copy.linkedin.trim() : null,
+        copy_x: !isBlog && platforms.includes("x") ? out.copy.x.trim() : null,
+        copy_x_reply: !isBlog && platforms.includes("x") ? out.xReply.trim() || null : null,
+        copy_instagram: !isBlog && platforms.includes("instagram") ? out.copy.instagram.trim() : null,
         hashtags: isBlog ? null : hashtags.trim() || null,
         body: isBlog ? body.trim() || null : null,
         keywords: isBlog ? keywords.trim() || null : null,
-        link_url: link.trim() || null,
+        link_url: out.link.trim() || null,
         images: paths,
         assignee_id: assignee === NONE ? null : assignee,
         reviewer_id: reviewer === NONE ? null : reviewer,
@@ -404,6 +451,21 @@ export function ContentForm({
             <Card>
               <fieldset className="flex flex-col gap-5">
                 <legend className="mb-5 text-xl font-extrabold">Post copy</legend>
+                <div className="-mt-2 flex flex-wrap items-center justify-between gap-3 rounded-md bg-ice-100 px-4 py-3">
+                  <p className="min-w-0 flex-1 text-[13px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
+                    DrupalAsia links get UTM tags when you save:{" "}
+                    <code className="font-mono font-bold text-navy-800">
+                      utm_source=&lt;platform&gt;&amp;utm_medium={UTM_MEDIUM}
+                      {campaign?.utm_campaign ? `&utm_campaign=${campaign.utm_campaign}` : ""}
+                    </code>
+                    {campaign && !campaign.utm_campaign ? (
+                      <>. This campaign has no UTM campaign yet; add one in the campaign&apos;s settings.</>
+                    ) : null}
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={applyUtm} disabled={selected.length === 0}>
+                    Tag links now
+                  </Button>
+                </div>
                 {selected.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Pick a platform to write its copy.</p>
                 ) : null}

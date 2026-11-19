@@ -14,10 +14,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { utmSlug } from "@/lib/utm";
 import { CAMPAIGN_COLORS, CAMPAIGN_STATUSES, type Campaign, type CampaignStatus, type Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign }) {
+export function CampaignForm({
+  me,
+  initial,
+  usedUtm = [],
+}: {
+  me: Profile;
+  initial?: Campaign;
+  /** utm_campaign values this campaign's posts already use, most used first. */
+  usedUtm?: { value: string; count: number }[];
+}) {
   const router = useRouter();
   const editing = !!initial;
   const [name, setName] = useState(initial?.name ?? "");
@@ -27,6 +37,8 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
   const [color, setColor] = useState<string>(initial?.color ?? CAMPAIGN_COLORS[0].value);
   const [hashtags, setHashtags] = useState(initial?.default_hashtags ?? "");
   const [link, setLink] = useState(initial?.default_link ?? "");
+  const [utm, setUtm] = useState(initial?.utm_campaign ?? "");
+  const suggestedUtm = name.trim() ? `dac27_${utmSlug(name)}`.slice(0, 100) : "";
   const [status, setStatus] = useState<CampaignStatus>(initial?.status ?? "planning");
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +46,8 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
     e.preventDefault();
     if (!name.trim()) return toast.error("Give the campaign a name.");
     if (startDate && endDate && endDate < startDate) return toast.error("The end date is before the start date.");
+    const utmValue = utmSlug(utm);
+    if (utm.trim() && !utmValue) return toast.error("Use letters, numbers and underscores for the UTM campaign.");
 
     setSaving(true);
     const supabase = createClient();
@@ -45,6 +59,7 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
       color,
       default_hashtags: hashtags.trim() || null,
       default_link: link.trim() || null,
+      utm_campaign: utmValue || null,
       status,
     };
 
@@ -183,6 +198,56 @@ export function CampaignForm({ me, initial }: { me: Profile; initial?: Campaign 
                 onChange={(e) => setLink(e.target.value)}
               />
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="utm">UTM campaign</Label>
+            <Input
+              id="utm"
+              maxLength={100}
+              aria-describedby="utm-hint"
+              placeholder={suggestedUtm || "dac27_speaker_promotion"}
+              value={utm}
+              onChange={(e) => setUtm(e.target.value)}
+              onBlur={() => setUtm((v) => utmSlug(v))}
+              className="font-mono"
+            />
+            <span id="utm-hint" className="text-[13px] text-muted-foreground">
+              Saving a post in this campaign sets <code className="font-mono">utm_campaign</code> to this on its
+              DrupalAsia links. Lowercase letters, numbers and underscores.
+            </span>
+            {(usedUtm.length || suggestedUtm) && !utm ? (
+              <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                <span className="font-semibold text-muted-foreground">Use:</span>
+                {usedUtm.map((u) => (
+                  <button
+                    key={u.value}
+                    type="button"
+                    onClick={() => setUtm(u.value)}
+                    className="cursor-pointer rounded-full border border-input bg-white px-3 py-1 font-mono font-bold text-navy-800 hover:border-navy-800"
+                  >
+                    {u.value}{" "}
+                    <span className="font-sans font-semibold text-muted-foreground">
+                      · in {u.count} {u.count === 1 ? "link" : "links"}
+                    </span>
+                  </button>
+                ))}
+                {suggestedUtm && !usedUtm.some((u) => u.value === suggestedUtm) ? (
+                  <button
+                    type="button"
+                    onClick={() => setUtm(suggestedUtm)}
+                    className="cursor-pointer rounded-full border border-dashed border-input bg-white px-3 py-1 font-mono font-bold text-navy-800 hover:border-navy-800"
+                  >
+                    {suggestedUtm}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {usedUtm.length > 1 ? (
+              <span className="text-[13px] font-semibold text-orange-500">
+                This campaign&apos;s posts use {usedUtm.length} different UTM campaigns. Saving each post switches it to
+                the one set here.
+              </span>
+            ) : null}
           </div>
         </fieldset>
       </Card>

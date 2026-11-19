@@ -1364,3 +1364,12 @@ end; $$;
 revoke all on function public.prune_push_subscriptions(text, text[]) from public;
 grant execute on function public.prune_push_subscriptions(text, text[]) to anon, authenticated;
 
+
+-- ---------------------------------------------------------------------------
+-- UTM campaign name per campaign (e.g. dac27_speaker_promotion). Posts in the campaign
+-- get utm_campaign set to it on their DrupalAsia links when saved.
+-- ---------------------------------------------------------------------------
+alter table public.campaigns add column if not exists utm_campaign text;
+alter table public.campaigns drop constraint if exists campaigns_utm_campaign_check;
+alter table public.campaigns add constraint campaigns_utm_campaign_check
+  check (utm_campaign is null or utm_campaign ~ '^[a-z0-9][a-z0-9_-]{0,99}$');
