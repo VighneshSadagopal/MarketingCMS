@@ -18,7 +18,7 @@ export function AppHeader({ profile }: { profile: Profile }) {
             <span className="text-xs font-semibold tracking-[0.12em] text-ice-100/70 uppercase">Marketing CMS</span>
           </span>
         </Link>
-        <MainNav />
+        <MainNav isOwner={profile.role === "owner"} />
       </div>
       <div className="flex items-center gap-2 sm:gap-4">
         {/* The only way to add content from the header, so it stays visible on phones (icon only there). */}

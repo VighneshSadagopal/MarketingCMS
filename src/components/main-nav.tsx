@@ -14,11 +14,14 @@ const LINKS = [
   { href: "/guidelines", label: "Content guidelines" },
 ];
 
-export function MainNav() {
+/** Owner-only links. */
+const OWNER_LINKS = [{ href: "/updates", label: "Updates" }];
+
+export function MainNav({ isOwner = false }: { isOwner?: boolean }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="flex gap-1">
-      {LINKS.map((l) => {
+      {[...LINKS, ...(isOwner ? OWNER_LINKS : [])].map((l) => {
         const active =
           l.href === "/"
             ? pathname === "/"
