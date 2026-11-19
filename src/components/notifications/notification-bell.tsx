@@ -44,34 +44,50 @@ export function NotificationBell({ userId }: { userId: string }) {
 
   useEffect(() => {
     const supabase = createClient();
-    // Initial load runs after mount, outside render.
-    const first = setTimeout(() => void load(), 0);
-    const channel = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        async (payload) => {
-          await load();
-          if (payload.eventType === "INSERT") {
-            const { data } = await supabase
-              .from("notifications")
-              .select(NOTIFICATION_SELECT)
-              .eq("id", (payload.new as { id: string }).id)
-              .maybeSingle();
-            const n = data as unknown as AppNotification | null;
-            if (n) {
-              toast(notificationText(n), {
-                action: { label: "Open", onClick: () => router.push(notificationHref(n)) },
-              });
-            }
-          }
-        },
-      )
-      .subscribe();
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function showToast(id: string) {
+      const { data } = await supabase.from("notifications").select(NOTIFICATION_SELECT).eq("id", id).maybeSingle();
+      const n = data as unknown as AppNotification | null;
+      if (n) toast(notificationText(n), { action: { label: "Open", onClick: () => router.push(notificationHref(n)) } });
+    }
+
+    (async () => {
+      // Live updates only see this person's rows once the realtime connection carries their sign-in.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) await supabase.realtime.setAuth(data.session.access_token);
+      if (cancelled) return;
+      await load();
+      channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+          (payload) => {
+            void load();
+            if (payload.eventType === "INSERT") void showToast((payload.new as { id: string }).id);
+          },
+        )
+        .subscribe();
+    })();
+
+    const { data: auth } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) void supabase.realtime.setAuth(session.access_token);
+    });
+    // Safety net: refresh when coming back to the tab, and every minute.
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 60_000);
+
     return () => {
-      clearTimeout(first);
-      void supabase.removeChannel(channel);
+      cancelled = true;
+      auth.subscription.unsubscribe();
+      window.removeEventListener("focus", onFocus);
+      clearInterval(timer);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [userId, load, router]);
 
