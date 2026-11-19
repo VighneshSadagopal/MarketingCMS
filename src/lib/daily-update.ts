@@ -158,8 +158,10 @@ export async function buildDailyUpdate(dayIso: string, baseUrl: string) {
     }
   }
   tasks.sort((a, b) => a.due - b.due);
-  const overdue = tasks.filter((t) => t.due < Date.now());
-  const upcoming = tasks.filter((t) => t.due >= Date.now());
+  const now = Date.now();
+  const overdue = tasks.filter((t) => t.due < now);
+  const laterToday = tasks.filter((t) => t.due >= now && t.due < tomorrowStart.getTime());
+  const upcoming = tasks.filter((t) => t.due >= Math.max(now, tomorrowStart.getTime()));
 
   const taskLine = (t: Task) => {
     const parts = [
@@ -171,6 +173,10 @@ export async function buildDailyUpdate(dayIso: string, baseUrl: string) {
     return `• ${link(t.r)} · ${parts.join(" · ")}`;
   };
 
+  if (laterToday.length) {
+    lines.push("", `*Due later today (${laterToday.length})*`);
+    for (const t of laterToday) lines.push(taskLine(t));
+  }
   lines.push("", `*Important for tomorrow (${dayLabel(tomorrowIso)})*`);
   if (!upcoming.length) lines.push("• No deadlines tomorrow.");
   for (const t of upcoming) lines.push(taskLine(t));
